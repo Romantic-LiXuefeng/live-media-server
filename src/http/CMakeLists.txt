@@ -1,0 +1,3 @@
+FILE(GLOB SOURCE "${PROJECT_ROOT_PATH}/src/http/*.cpp")
+ADD_LIBRARY(http STATIC ${SOURCE})  
+TARGET_LINK_LIBRARIES(http core kernel rtmp)

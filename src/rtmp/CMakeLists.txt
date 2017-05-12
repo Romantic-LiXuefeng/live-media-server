@@ -1,0 +1,3 @@
+FILE(GLOB SOURCE "${PROJECT_ROOT_PATH}/src/rtmp/*.cpp")
+ADD_LIBRARY(rtmp STATIC ${SOURCE})  
+TARGET_LINK_LIBRARIES(rtmp core kernel)

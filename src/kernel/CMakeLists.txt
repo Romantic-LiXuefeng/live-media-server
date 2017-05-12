@@ -1,0 +1,3 @@
+FILE(GLOB SOURCE "${PROJECT_ROOT_PATH}/src/kernel/*.cpp")
+ADD_LIBRARY(kernel STATIC ${SOURCE})  
+TARGET_LINK_LIBRARIES(kernel core)
