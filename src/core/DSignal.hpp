@@ -19,7 +19,7 @@ public:
     DSignal(DEvent *event);
     ~DSignal();
 
-    void open(int sig);
+    bool open(int sig);
     void close();
     void setHandler(SignalHandler handler);
 

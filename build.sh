@@ -133,6 +133,48 @@ function build_http_parser()
     fi
 }
 
+function build_codec()
+{
+	cd $current_dir
+	if ! test -f $library_dir/codec/lib/libcodec.so; then
+		if test -d $_3rdParty_dir/codec; then
+			rm -rf $_3rdParty_dir/codec
+		fi
+
+		cd $_3rdParty_dir && unzip codec.zip && cd codec && mkdir build && cd build
+		cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$current_dir/$library_dir/codec
+		make && make install
+
+		if test $? -ne 0; then
+            echo -e $RED"...\t\tFailed!"$BLACK
+            exit -1
+        fi
+
+		rm -rf $current_dir/$_3rdParty_dir/codec
+	fi
+}
+
+function build_zlib()
+{
+	cd $current_dir
+	if ! test -f $library_dir/zlib/lib/libz.so; then
+		if test -d $_3rdParty_dir/zlib-1.2.11; then
+			rm -rf $_3rdParty_dir/zlib-1.2.11
+		fi
+
+		cd $_3rdParty_dir && unzip zlib-1.2.11.zip && cd zlib-1.2.11
+		./configure --prefix=$current_dir/$library_dir/zlib
+		make && make install
+
+		if test $? -ne 0; then
+            echo -e $RED"...\t\tFailed!"$BLACK
+            exit -1
+        fi
+
+		rm -rf $current_dir/$_3rdParty_dir/zlib-1.2.11
+	fi
+}
+
 function runCommand()
 {
 	echo -n -e $YELLOW"run $1"$BLACK
@@ -185,6 +227,8 @@ runCommand build_gperftools
 runCommand build_cares
 runCommand build_pcre
 runCommand build_http_parser
+runCommand build_codec
+runCommand build_zlib
 
 echo -e $GREEN"build library success."$BLACK
 

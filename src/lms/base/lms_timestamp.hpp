@@ -2,7 +2,7 @@
 #define LMS_TIMESTAMP_HPP
 
 #include "DGlobal.hpp"
-#include "rtmp_global.hpp"
+#include "kernel_global.hpp"
 
 namespace LmsTimeStamp {
     enum CorrectType { simple = 0, middle, high };
@@ -21,6 +21,8 @@ public:
 
     void set_correct_type(int type);
     void set_correct_info(int v_delta, int a_delta);
+
+    void reset();
 
 private:
     dint64 high_correct(CommonMessage *msg);

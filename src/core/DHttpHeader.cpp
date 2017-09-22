@@ -146,8 +146,9 @@ void DHttpHeader::setContentLength(int len)
     addValue("Content-Length", DString::number(len));
 }
 
-void DHttpHeader::setContentType(const DString &type)
+void DHttpHeader::setContentType(const DString &name)
 {
+    DString type = getContentType(name);
     addValue("Content-Type", type);
 }
 
@@ -196,12 +197,14 @@ DString DHttpHeader::getRequestString(const DString &type, const DString &url)
     return ret;
 }
 
-DString DHttpHeader::getResponseString(int err, const DString &info)
+DString DHttpHeader::getResponseString(int code)
 {
     DString ret;
     std::map<DString, DString>::iterator iter;
 
-    ret.append("HTTP/1.1 ").append(DString::number(err)).append(" ").append(info).append("\r\n");
+    DString status = getStatusInfo(code);
+
+    ret.append("HTTP/1.1 ").append(DString::number(code)).append(" ").append(status).append("\r\n");
 
     for (iter = m_headers.begin(); iter != m_headers.end(); ++iter) {
         DString key = iter->first;
@@ -275,4 +278,25 @@ DString DHttpHeader::generateDate()
     sprintf(localtm, "%s, %02d %s %s %s GMT", week, atoi(day), mon, realyear, time);
 
     return DString(localtm);
+}
+
+DString DHttpHeader::getStatusInfo(int code)
+{
+    DString info;
+
+    switch (code) {
+    case 200:
+        info = "OK";
+        break;
+    case 403:
+        info = "Forbidden";
+        break;
+    case 404:
+        info = "Not Found";
+        break;
+    default:
+        break;
+    }
+
+    return info;
 }

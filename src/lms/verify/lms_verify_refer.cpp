@@ -11,7 +11,7 @@ lms_verify_refer::~lms_verify_refer()
 
 }
 
-bool lms_verify_refer::check(rtmp_request *req, bool publish)
+bool lms_verify_refer::check(kernel_request *req, bool publish)
 {
     lms_server_config_struct *config = lms_config::instance()->get_server(req);
     DAutoFree(lms_server_config_struct, config);
@@ -30,7 +30,7 @@ bool lms_verify_refer::check(rtmp_request *req, bool publish)
     }
 }
 
-bool lms_verify_refer::check_publish(lms_server_config_struct *config, rtmp_request *req, const DString &url)
+bool lms_verify_refer::check_publish(lms_server_config_struct *config, kernel_request *req, const DString &url)
 {
     bool ret = false;
 
@@ -61,7 +61,7 @@ bool lms_verify_refer::check_publish(lms_server_config_struct *config, rtmp_requ
     return ret;
 }
 
-bool lms_verify_refer::check_play(lms_server_config_struct *config, rtmp_request *req, const DString &url)
+bool lms_verify_refer::check_play(lms_server_config_struct *config, kernel_request *req, const DString &url)
 {
     bool ret = false;
 

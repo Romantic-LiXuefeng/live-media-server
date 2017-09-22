@@ -6,6 +6,8 @@
 #include "DStream.hpp"
 #include "DGlobal.hpp"
 #include "DStringList.hpp"
+#include "kernel_request.hpp"
+#include "kernel_global.hpp"
 
 #include <tr1/functional>
 #include <map>
@@ -90,10 +92,10 @@
 
 #define RTMP_DEFAULT_ACKWINKOW_SIZE (2.5 * 1000 * 1000)
 
-class CommonMessageHeader
+class RtmpMessageHeader
 {
 public:
-    CommonMessageHeader()
+    RtmpMessageHeader()
     {
         message_type = 0;
         payload_length = 0;
@@ -103,7 +105,7 @@ public:
         perfer_cid = RTMP_CID_OverConnection;
     }
 
-    CommonMessageHeader(const CommonMessageHeader &h)
+    RtmpMessageHeader(const RtmpMessageHeader &h)
     {
         message_type = h.message_type;
         stream_id = h.stream_id;
@@ -113,7 +115,7 @@ public:
         perfer_cid = h.perfer_cid;
     }
 
-    CommonMessageHeader & operator=(const CommonMessageHeader &h)
+    RtmpMessageHeader & operator=(const RtmpMessageHeader &h)
     {
         message_type = h.message_type;
         stream_id = h.stream_id;
@@ -134,20 +136,20 @@ public:
     dint32 perfer_cid;
 };
 
-class CommonMessage
+class RtmpMessage
 {
 public:
-    CommonMessage() {}
+    RtmpMessage() {}
 
-    CommonMessage(CommonMessage *msg)
+    RtmpMessage(RtmpMessage *msg)
     {
         header = msg->header;
         payload = msg->payload;
     }
 
-    virtual ~CommonMessage() {}
+    virtual ~RtmpMessage() {}
 
-    virtual void copy(CommonMessage *msg)
+    virtual void copy(RtmpMessage *msg)
     {
         this->header = msg->header;
         this->payload = msg->payload;
@@ -180,161 +182,29 @@ public:
     }
 
 public:
-    CommonMessageHeader header;
+    RtmpMessageHeader header;
     DSharedPtr<MemoryChunk> payload;
 };
 
-class rtmp_request
+typedef std::tr1::function<int (RtmpMessage*)> RtmpAVHandler;
+#define Rtmp_AV_Handler_Callback(str)  std::tr1::bind(str, this, std::tr1::placeholders::_1)
+
+typedef std::tr1::function<bool (kernel_request*)> RtmpVerifyHandler;
+#define Rtmp_Verify_Handler_Callback(str)  std::tr1::bind(str, this, std::tr1::placeholders::_1)
+
+typedef std::tr1::function<void (kernel_request*)> RtmpNotifyHandler;
+#define Rtmp_Notify_Handler_Callback(str)  std::tr1::bind(str, this, std::tr1::placeholders::_1)
+
+class AckWindowSize
 {
 public:
-    rtmp_request() {}
-    ~rtmp_request() {}
+    dint32 window;
+    // number of received bytes.
+    duint64 nb_recv_bytes;
+    // previous responsed sequence number.
+    duint64 sequence_number;
 
-    void copy(rtmp_request *src)
-    {
-        vhost = src->vhost;
-        app = src->app;
-        stream = src->stream;
-        tcUrl = src->tcUrl;
-        pageUrl = src->pageUrl;
-        swfUrl = src->swfUrl;
-    }
-
-    void set_tcUrl(const DString &value)
-    {
-        tcUrl = value;
-
-        size_t pos = std::string::npos;
-        DString url = value;
-
-        if ((pos = url.find("://")) != std::string::npos) {
-            schema = url.substr(0, pos);
-            url = url.substr(schema.length() + 3);
-        }
-
-        if ((pos = url.find("/")) != std::string::npos) {
-            host = url.substr(0, pos);
-            url = url.substr(host.length() + 1);
-        }
-
-        port = "1935";
-        if ((pos = host.find(":")) != std::string::npos) {
-            port = host.substr(pos + 1);
-            host = host.substr(0, pos);
-        }
-
-        vhost = host;
-        app = url;
-
-        if ((pos = url.find("?vhost=")) != std::string::npos) {
-            app = url.substr(0, pos);
-            vhost = url.substr(app.length() + 7);
-        }
-    }
-
-    void set_stream(const DString &value)
-    {
-        size_t pos = std::string::npos;
-        DString url = value;
-        stream = value;
-
-        if ((pos = url.find("?")) != std::string::npos) {
-            stream = url.substr(0, pos);
-            url = url.substr(stream.length() + 1);
-        }
-
-        DStringList args = url.split("&");
-        for (int i = 0; i < (int)args.size(); ++i) {
-            DStringList temp = args.at(i).split("=");
-            if (temp.size() == 2) {
-                params[temp.at(0)] = temp.at(1);
-            }
-        }
-    }
-
-    // /live/livestream.flv?vhost=test.com&arg1=temp&arg2=temp
-    void set_http_url(const DString &host, const DString &url, const DString &refer, bool del_suffix)
-    {
-        size_t pos = std::string::npos;
-
-        vhost = host;
-        port = "80";
-        if ((pos = vhost.find(":")) != std::string::npos) {
-            port = vhost.substr(pos + 1);
-            vhost = vhost.substr(0, pos);
-        }
-
-        DString _url = url;
-        DString location = url;
-
-        pos = std::string::npos;
-        if ((pos = _url.find("?")) != std::string::npos) {
-            location = _url.substr(0, pos);
-            _url = _url.substr(location.length() + 1);
-        }
-
-        DStringList args = _url.split("&");
-        for (int i = 0; i < (int)args.size(); ++i) {
-            DStringList temp = args.at(i).split("=");
-            if (temp.size() == 2) {
-                if (temp.at(0) == "vhost") {
-                    vhost = temp.at(1);
-                } else {
-                    params[temp.at(0)] = temp.at(1);
-                }
-            }
-        }
-
-        if ((pos = location.rfind("/")) != string::npos) {
-            stream = location.substr(pos + 1);
-            app = location.substr(0, pos);
-        } else {
-            app = location;
-        }
-
-        if (app.startWith("/")) {
-            app = app.substr(1);
-        }
-
-        if (del_suffix) {
-            pos = string::npos;
-            if ((pos = stream.rfind(".")) != string::npos) {
-                stream = stream.substr(0, pos);
-            }
-        }
-
-        tcUrl = "rtmp://" + vhost + "/" + app;
-        pageUrl = refer;
-        schema = "http";
-    }
-
-    DString get_stream_url()
-    {
-        return vhost + "/" + app + "/" + stream;
-    }
-
-public:
-    DString vhost;
-    DString app;
-    DString stream;
-
-    DString schema;
-    DString host;
-    DString port;
-    std::map<DString,DString> params;
-
-    DString tcUrl;
-    DString pageUrl;
-    DString swfUrl;
+    AckWindowSize() : window(0), nb_recv_bytes(0), sequence_number(0){}
 };
-
-typedef std::tr1::function<int (CommonMessage*)> AVHandlerEvent;
-#define AV_Handler_CALLBACK(str)  std::tr1::bind(str, this, std::tr1::placeholders::_1)
-
-typedef std::tr1::function<bool (rtmp_request*)> VerifyHandlerEvent;
-#define Verify_Handler_CALLBACK(str)  std::tr1::bind(str, this, std::tr1::placeholders::_1)
-
-typedef std::tr1::function<void (rtmp_request*)> NotifyHandlerEvent;
-#define Notify_Handler_CALLBACK(str)  std::tr1::bind(str, this, std::tr1::placeholders::_1)
 
 #endif // RTMP_GLOBAL_HPP

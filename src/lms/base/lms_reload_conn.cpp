@@ -16,17 +16,24 @@ lms_reload_conn::~lms_reload_conn()
 
 }
 
-int lms_reload_conn::open()
+bool lms_reload_conn::open()
 {
     m_fd = eventfd(0, EFD_NONBLOCK);
-    m_event->add(this);
+    if (m_fd == -1) {
+        return false;
+    }
 
-    return m_fd;
+    if(!m_event->add(this, m_fd)) {
+        log_error("add eventfd to epoll failed");
+        return false;
+    }
+
+    return true;
 }
 
 void lms_reload_conn::close()
 {
-    m_event->del(this);
+    m_event->del(this, m_fd);
 
     if (m_fd != -1) {
         ::close(m_fd);
@@ -63,11 +70,6 @@ bool lms_reload_conn::empty()
 DEvent *lms_reload_conn::getEvent()
 {
     return m_event;
-}
-
-int lms_reload_conn::GetDescriptor()
-{
-    return m_fd;
 }
 
 int lms_reload_conn::onRead()

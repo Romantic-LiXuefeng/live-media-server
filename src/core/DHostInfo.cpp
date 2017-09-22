@@ -14,18 +14,21 @@ DHostInfo::~DHostInfo()
     ares_destroy(m_channel);
 }
 
-void DHostInfo::lookupHost(const DString &host)
+bool DHostInfo::lookupHost(const DString &host)
 {
     ares_init(&m_channel);
     ares_gethostbyname(m_channel, host.c_str(), AF_INET, callback, this);
     ares_getsock(m_channel, &m_fd, 1);
 
-    m_event->add(this);
+    if ((m_fd != -1) && !m_event->add(this, m_fd)) {
+        return false;
+    }
+    return true;
 }
 
 void DHostInfo::close()
 {
-    m_event->del(this);
+    m_event->del(this, m_fd);
 }
 
 void DHostInfo::setFinishedHandler(HostHandler handler)
@@ -36,11 +39,6 @@ void DHostInfo::setFinishedHandler(HostHandler handler)
 void DHostInfo::setErrorHandler(HostHandler handler)
 {
     m_error_handler = handler;
-}
-
-int DHostInfo::GetDescriptor()
-{
-    return m_fd;
 }
 
 int DHostInfo::onRead()
@@ -86,8 +84,14 @@ void DHostInfo::callback(void *arg, int status, int timeouts, struct hostent *ho
         }
     }
 
-    if (obj->m_finished_handler) {
-        obj->m_finished_handler(ips);
+    if (ips.isEmpty()) {
+        if (obj->m_error_handler) {
+            obj->m_error_handler(ips);
+        }
+    } else {
+        if (obj->m_finished_handler) {
+            obj->m_finished_handler(ips);
+        }
     }
 
     obj->close();

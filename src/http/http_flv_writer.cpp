@@ -1,17 +1,19 @@
 #include "http_flv_writer.hpp"
 #include "DSharedPtr.hpp"
 #include "DMemPool.hpp"
+#include "kernel_errno.hpp"
+#include "kernel_log.hpp"
 
 http_flv_writer::http_flv_writer(DTcpSocket *socket)
     : m_socket(socket)
     , m_chunked(true)
 {
-
+    m_muxer = new flv_muxer();
 }
 
 http_flv_writer::~http_flv_writer()
 {
-
+    DFree(m_muxer);
 }
 
 void http_flv_writer::set_chunked(bool chunked)
@@ -19,170 +21,98 @@ void http_flv_writer::set_chunked(bool chunked)
     m_chunked = chunked;
 }
 
-void http_flv_writer::send_av_data(CommonMessage *msg)
+int http_flv_writer::send_av_data(CommonMessage *msg)
 {
-    int nb_size = 0;
-
-    // 64 => chunk size
-    // 2  => \r\n
-    // 11 => tag header size
-    // 4  => previous tag size
-    MemoryChunk *chunk = NULL;
-    DSharedPtr<MemoryChunk> header;
+    int ret = ERROR_SUCCESS;
 
     if (m_chunked) {
-        chunk = DMemPool::instance()->getMemory(64 + 2 + 11);
-    } else {
-        chunk = DMemPool::instance()->getMemory(64 + 11);
-    }
+        // 64 => chunk size
+        // 2  => \r\n
+        MemoryChunk *chunk = DMemPool::instance()->getMemory(64 + 2);
+        DSharedPtr<MemoryChunk> begin = DSharedPtr<MemoryChunk>(chunk);
 
-    header = DSharedPtr<MemoryChunk>(chunk);
-    int chunked_size = 11 + msg->payload->length + 4;
+        int chunked_size = 11 + msg->payload_length + 4;
+        int nb_size = snprintf(begin->data, 64, "%x", chunked_size);
 
-    if (m_chunked) {
-        nb_size = snprintf(header->data, 64, "%x", chunked_size);
-    }
+        begin->length = nb_size + 2;
 
-    header->length = nb_size + 2 + 11;
-
-    char *p = header->data + nb_size;
-
-    if (m_chunked) {
+        char *p = begin->data + nb_size;
         *p++ = '\r';
         *p++ = '\n';
+
+        m_socket->add(begin, begin->length);
     }
 
-    // tag header: tag type.
-    if (msg->is_video()) {
-        *p++ = 0x09;
-    } else if (msg->is_audio()) {
-        *p++ = 0x08;
-    } else {
-        *p++ = 0x12;
+    std::list<DSharedPtr<MemoryChunk> > msgs = m_muxer->encode(msg);
+    std::list<DSharedPtr<MemoryChunk> >::iterator it;
+    for (it = msgs.begin(); it != msgs.end(); ++it) {
+        DSharedPtr<MemoryChunk> ch = *it;
+        m_socket->add(ch, ch->length);
     }
-
-    // tag header: tag data size.
-    char *pp = (char*)&msg->payload->length;
-    *p++ = pp[2];
-    *p++ = pp[1];
-    *p++ = pp[0];
-
-    // tag header: tag timestamp.
-    pp = (char*)&msg->header.timestamp;
-    *p++ = pp[2];
-    *p++ = pp[1];
-    *p++ = pp[0];
-    *p++ = pp[3];
-
-    // tag header: stream id always 0.
-    pp = (char*)&msg->header.stream_id;
-    *p++ = pp[2];
-    *p++ = pp[1];
-    *p++ = pp[0];
-
-    SendBuffer *buf = new SendBuffer;
-    buf->chunk = header;
-    buf->len = header->length;
-    buf->pos = 0;
-
-    m_socket->addData(buf);
-
-    SendBuffer *body = new SendBuffer;
-    body->chunk = msg->payload;
-    body->len = msg->payload->length;
-    body->pos = 0;
-
-    m_socket->addData(body);
-
-    // 6 = 4 + 2
-    // 4 => previous tag size
-    // 2 => \r\n
-    MemoryChunk *pre_chunk = NULL;
-    DSharedPtr<MemoryChunk> tail;
 
     if (m_chunked) {
-        pre_chunk = DMemPool::instance()->getMemory(6);
-        tail = DSharedPtr<MemoryChunk>(pre_chunk);
-        tail->length = 6;
-    } else {
-        pre_chunk = DMemPool::instance()->getMemory(4);
-        tail = DSharedPtr<MemoryChunk>(pre_chunk);
-        tail->length = 4;
-    }
+        // 2 => \r\n
+        MemoryChunk *chunk = DMemPool::instance()->getMemory(2);
+        DSharedPtr<MemoryChunk> end = DSharedPtr<MemoryChunk>(chunk);
 
-    p = tail->data;
+        end->length = 2;
 
-    // previous tag size.
-    int pre_tag_len = msg->payload->length + 11;
-
-    pp = (char*)&pre_tag_len;
-    *p++ = pp[3];
-    *p++ = pp[2];
-    *p++ = pp[1];
-    *p++ = pp[0];
-
-    if (m_chunked) {
+        char *p = end->data;
         *p++ = '\r';
         *p++ = '\n';
+
+        m_socket->add(end, end->length);
     }
 
-    SendBuffer *pre_tag = new SendBuffer;
-    pre_tag->chunk = tail;
-    pre_tag->len = tail->length;
-    pre_tag->pos = 0;
+    if ((ret = m_socket->flush()) != ERROR_SUCCESS) {
+        log_error_eagain(ret, ERROR_HTTP_WRITE_FLV_TAG, "write http flv tag failed. ret=%d", ret);
+        return ret;
+    }
 
-    m_socket->addData(pre_tag);
+    return ret;
 }
 
-void http_flv_writer::send_flv_header()
+int http_flv_writer::send_flv_header()
 {
-    int nb_size = 0;
-
-    // 81 = 64 + 2 + 13 + 2
-    MemoryChunk *chunk = DMemPool::instance()->getMemory(81);
-    DSharedPtr<MemoryChunk> header = DSharedPtr<MemoryChunk>(chunk);
+    int ret = ERROR_SUCCESS;
 
     if (m_chunked) {
-        nb_size = snprintf(header->data, 64, "%x", 13);
-    }
+        // 66 = 64 + 2
+        MemoryChunk *chunk = DMemPool::instance()->getMemory(66);
+        DSharedPtr<MemoryChunk> begin = DSharedPtr<MemoryChunk>(chunk);
 
-    char *p = header->data + nb_size;
+        // 13 = flv header
+        int nb_size = snprintf(begin->data, 64, "%x", 13);
 
-    if (m_chunked) {
+        begin->length = nb_size + 2;
+
+        char *p = begin->data + nb_size;
         *p++ = '\r';
         *p++ = '\n';
+
+        m_socket->add(begin, begin->length);
     }
 
-    // flv header
-    *p++ = 'F';
-    *p++ = 'L';
-    *p++ = 'V';
-    *p++ = 0x01;
-    *p++ = 0x05;
-    *p++ = 0x00;
-    *p++ = 0x00;
-    *p++ = 0x00;
-    *p++ = 0x09;
-    *p++ = 0x00;
-    *p++ = 0x00;
-    *p++ = 0x00;
-    *p++ = 0x00;
+    DSharedPtr<MemoryChunk> header = m_muxer->flv_header();
+    m_socket->add(header, header->length);
 
     if (m_chunked) {
+        // \r\n
+        MemoryChunk *chunk = DMemPool::instance()->getMemory(2);
+        DSharedPtr<MemoryChunk> end = DSharedPtr<MemoryChunk>(chunk);
+        end->length = 2;
+
+        char *p = end->data;
         *p++ = '\r';
         *p++ = '\n';
+
+        m_socket->add(end, end->length);
     }
 
-    if (m_chunked) {
-        header->length = nb_size + 2 + 13 + 2;
-    } else {
-        header->length = 13;
+    if ((ret = m_socket->flush()) != ERROR_SUCCESS) {
+        log_error_eagain(ret, ERROR_HTTP_WRITE_FLV_HEADER, "write http flv header failed. ret=%d", ret);
+        return ret;
     }
 
-    SendBuffer *buf = new SendBuffer;
-    buf->chunk = header;
-    buf->len = header->length;
-    buf->pos = 0;
-
-    m_socket->addData(buf);
+    return ret;
 }

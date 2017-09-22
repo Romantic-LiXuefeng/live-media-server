@@ -11,6 +11,8 @@ public:
 
     void start();
 
+    void stop();
+
     /**
      * @brief 重新启动计时器，并返回已经走过的时间，单位微妙
      */

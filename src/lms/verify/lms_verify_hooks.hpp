@@ -4,7 +4,7 @@
 #include "DTcpSocket.hpp"
 #include "DHostInfo.hpp"
 #include "DHttpParser.hpp"
-#include "rtmp_global.hpp"
+#include "kernel_request.hpp"
 #include "http_uri.hpp"
 #include "http_reader.hpp"
 
@@ -20,11 +20,11 @@ public:
     void set_timeout(dint64 timeout);
     void set_handler(HookHandlerEvent handler);
 
-    void on_connect(rtmp_request *req, duint64 id, const DString &url, const DString &ip);
-    void on_publish(rtmp_request *req, duint64 id, const DString &url, const DString &ip);
-    void on_play(rtmp_request *req, duint64 id, const DString &url, const DString &ip);
-    void on_unpublish(rtmp_request *req, duint64 id, const DString &url, const DString &ip);
-    void on_stop(rtmp_request *req, duint64 id, const DString &url, const DString &ip);
+    void on_connect(kernel_request *req, duint64 id, const DString &url, const DString &ip);
+    void on_publish(kernel_request *req, duint64 id, const DString &url, const DString &ip);
+    void on_play(kernel_request *req, duint64 id, const DString &url, const DString &ip);
+    void on_unpublish(kernel_request *req, duint64 id, const DString &url, const DString &ip);
+    void on_stop(kernel_request *req, duint64 id, const DString &url, const DString &ip);
 
 public:
     virtual int onReadProcess();
@@ -37,25 +37,24 @@ public:
 private:
     void lookup_host();
     void onHost(const DStringList &ips);
+    void onHostError(const DStringList &ips);
 
-    void do_post();
+    int do_post();
 
     void release();
 
-    int read_header();
-    int read_body();
     int parse_body();
 
     void verify();
+
+    int onHttpHeader(DHttpParser *parser);
 
 private:
     DString m_value;
     http_uri m_uri;
 
-    dint8 m_schedule;
     int m_content_length;
 
-    DHttpParser *m_parser;
     http_reader *m_reader;
 
     HookHandlerEvent m_handler;

@@ -1,1 +1,0 @@
-# live-media-server

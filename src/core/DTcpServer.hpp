@@ -6,17 +6,18 @@
 class DTcpListener : public EventHanderBase
 {
 public:
-    DTcpListener();
+    DTcpListener(DEvent *event);
     virtual ~DTcpListener();
 
     int listen(const DString &ip, int port);
     void close();
 
-    void addToEvent(DEvent *event);
+    void setEvent(DEvent *event);
     DEvent* getEvent();
 
+    int GetDescriptor();
+
 public:
-    virtual int GetDescriptor();
     virtual int onRead();
     virtual int onWrite();
 
@@ -24,7 +25,6 @@ protected:
     virtual EventHanderBase* onNewConnection(int fd) = 0;
 
 private:
-    void setNonblocking(int fd);
     void process(int fd);
 
 protected:
@@ -41,10 +41,10 @@ public:
     DTcpServer();
     virtual ~DTcpServer();
 
-    bool init();
-    bool start();
+    void start();
 
-    void startListener(DTcpListener *listener);
+    bool addListener(DTcpListener *listener);
+    bool delListener(DTcpListener *listener);
 
     DEvent* getEvent();
 

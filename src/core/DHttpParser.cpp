@@ -36,7 +36,11 @@ int DHttpParser::parse(const char *data, unsigned int length)
         return -1;
     }
 
-    return nparsed;
+    if (nparsed < 0) {
+        return -2;
+    }
+
+    return 0;
 }
 
 bool DHttpParser::completed()

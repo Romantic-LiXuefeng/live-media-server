@@ -3,62 +3,59 @@
 
 #include "DString.hpp"
 #include "DSpinLock.hpp"
-#include "rtmp_global.hpp"
+#include "kernel_global.hpp"
 #include "lms_gop_cache.hpp"
 #include "lms_event_conn.hpp"
 #include "lms_reload_conn.hpp"
-
-#include "lms_play_edge.hpp"
-#include "lms_publish_edge.hpp"
+#include "lms_stream_writer.hpp"
+#include "lms_source_external.hpp"
 
 #include <pthread.h>
 #include <map>
 #include <deque>
 
-class rtmp_request;
+class kernel_request;
+class lms_edge;
 
 class lms_source
 {
 public:
-    lms_source(rtmp_request *req);
+    lms_source(kernel_request *req);
     ~lms_source();
 
     void reload();
+    bool reset();
 
 public:
-    bool onPlay(DEvent *event);
-    bool onPublish(DEvent *event);
+    bool onPlay(DEvent *event, bool edge);
+    bool onPublish(DEvent *event, bool edge);
     void onUnpublish();
 
     int onVideo(CommonMessage *msg);
     int onAudio(CommonMessage *msg);
     int onMetadata(CommonMessage *msg);
 
-    void add_connection(lms_conn_base *conn);
+    bool add_connection(lms_conn_base *conn);
     void del_connection(lms_conn_base *conn);
 
     int proxyMessage(CommonMessage *msg);
 
-    void addEvent(DEvent *event);
+    int send_gop_cache(lms_stream_writer *writer, dint64 length);
+
+    // external function contain hls, dvr, dash, ...
+    void start_external();
+    void stop_external();
 
 public:
-    void add_reload(lms_conn_base *base);
-    void del_reload(lms_conn_base *base);
-
-private:
-    lms_event_conn *createEventConn(lms_conn_base *conn);
-
-    void copy_gop(lms_event_conn *ev);
-
-    bool get_config_value();
-
-    void add_reload_conn(lms_conn_base *base);
+    bool add_reload_conn(lms_conn_base *base);
     void del_reload_conn(lms_conn_base *base);
 
 private:
-    rtmp_request *m_req;
+    kernel_request *m_req;
+    lms_gop_cache *m_gop_cache;
 
-    std::map<pthread_t, lms_event_conn*> m_conns;
+    lms_edge *m_publish;
+    lms_edge *m_play;
 
     // 防止同时推一路流，所以加锁控制
     bool m_can_publish;
@@ -66,15 +63,13 @@ private:
     // 连接加入、删除、唤醒等需要用锁控制
     DSpinLock m_mutex;
 
-    lms_gop_cache *m_gop_cache;
-
-private:
     bool m_is_edge;
-    lms_play_edge *m_play;
-    lms_publish_edge *m_publish;
+
+    lms_source_external *m_external;
 
 private:
-    std::deque<lms_reload_conn*> m_reloads;
+    std::map<pthread_t, lms_event_conn*> m_conns;
+    std::map<int, lms_reload_conn*> m_reloads;
 
 };
 
@@ -88,9 +83,11 @@ public:
     /**
      * @brief 如果找到了就返回，没找到就new一个同时存起来
      */
-    lms_source *addSource(rtmp_request *req);
+    lms_source *addSource(kernel_request *req);
 
     void reload();
+
+    void reset();
 
 private:
     static lms_source_manager *m_instance;

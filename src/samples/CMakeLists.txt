@@ -78,12 +78,12 @@ ADD_EXECUTABLE(regex-test ${SOURCE})
 TARGET_LINK_LIBRARIES(regex-test core)
 install(TARGETS regex-test RUNTIME DESTINATION bin/samples)
 
-FILE(GLOB SOURCE "${PROJECT_ROOT_PATH}/src/samples/dns-test.cpp")
-ADD_EXECUTABLE(dns-test ${SOURCE})
-TARGET_LINK_LIBRARIES(dns-test core)
-install(TARGETS dns-test RUNTIME DESTINATION bin/samples)
-
 FILE(GLOB SOURCE "${PROJECT_ROOT_PATH}/src/samples/http-test.cpp")
 ADD_EXECUTABLE(http-test ${SOURCE})
 TARGET_LINK_LIBRARIES(http-test core)
 install(TARGETS http-test RUNTIME DESTINATION bin/samples)
+
+FILE(GLOB SOURCE "${PROJECT_ROOT_PATH}/src/samples/gzip-test.cpp")
+ADD_EXECUTABLE(gzip-test ${SOURCE})
+TARGET_LINK_LIBRARIES(gzip-test core)
+install(TARGETS gzip-test RUNTIME DESTINATION bin/samples)

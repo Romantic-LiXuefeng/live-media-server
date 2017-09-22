@@ -29,6 +29,9 @@ LINK_DIRECTORIES("${PROJECT_ROOT_PATH}/library/openssl/lib/")
 INCLUDE_DIRECTORIES("${PROJECT_ROOT_PATH}/library/http-parser")
 LINK_DIRECTORIES("${PROJECT_ROOT_PATH}/library/http-parser")
 
+INCLUDE_DIRECTORIES("${PROJECT_ROOT_PATH}/library/zlib/include/")
+LINK_DIRECTORIES("${PROJECT_ROOT_PATH}/library/zlib/lib/")
+
 ADD_SUBDIRECTORY(src)
 
 install(DIRECTORY ${PROJECT_ROOT_PATH}/library DESTINATION .)

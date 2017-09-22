@@ -14,28 +14,21 @@
 
 using namespace rapidjson;
 
-namespace HookSchedule {
-    enum schedule { Header = 0, Body, Completed, Release };
-}
-
 lms_verify_hooks::lms_verify_hooks(DEvent *event)
     : DTcpSocket(event)
-    , m_schedule(HookSchedule::Header)
-    , m_content_length(0)
+    , m_content_length(-1)
     , m_handler(NULL)
     , m_result(false)
     , m_post_started(false)
     , m_timeout(DEFAULT_HOOK_TIMEOUT)
 {
-    m_parser = new DHttpParser(HTTP_RESPONSE);
-    m_reader = new http_reader(this);
+    m_reader = new http_reader(this, false, HTTP_HEADER_CALLBACK(&lms_verify_hooks::onHttpHeader));
 }
 
 lms_verify_hooks::~lms_verify_hooks()
 {
     log_warn("free --> lms_verify_hooks");
 
-    DFree(m_parser);
     DFree(m_reader);
 }
 
@@ -49,7 +42,7 @@ void lms_verify_hooks::set_handler(HookHandlerEvent handler)
     m_handler = handler;
 }
 
-void lms_verify_hooks::on_connect(rtmp_request *req, duint64 id, const DString &url, const DString &ip)
+void lms_verify_hooks::on_connect(kernel_request *req, duint64 id, const DString &url, const DString &ip)
 {
     m_id = id;
 
@@ -90,7 +83,7 @@ void lms_verify_hooks::on_connect(rtmp_request *req, duint64 id, const DString &
     lookup_host();
 }
 
-void lms_verify_hooks::on_publish(rtmp_request *req, duint64 id, const DString &url, const DString &ip)
+void lms_verify_hooks::on_publish(kernel_request *req, duint64 id, const DString &url, const DString &ip)
 {
     m_id = id;
 
@@ -131,7 +124,7 @@ void lms_verify_hooks::on_publish(rtmp_request *req, duint64 id, const DString &
     lookup_host();
 }
 
-void lms_verify_hooks::on_play(rtmp_request *req, duint64 id, const DString &url, const DString &ip)
+void lms_verify_hooks::on_play(kernel_request *req, duint64 id, const DString &url, const DString &ip)
 {
     m_id = id;
 
@@ -172,7 +165,7 @@ void lms_verify_hooks::on_play(rtmp_request *req, duint64 id, const DString &url
     lookup_host();
 }
 
-void lms_verify_hooks::on_unpublish(rtmp_request *req, duint64 id, const DString &url, const DString &ip)
+void lms_verify_hooks::on_unpublish(kernel_request *req, duint64 id, const DString &url, const DString &ip)
 {
     m_id = id;
 
@@ -210,7 +203,7 @@ void lms_verify_hooks::on_unpublish(rtmp_request *req, duint64 id, const DString
     lookup_host();
 }
 
-void lms_verify_hooks::on_stop(rtmp_request *req, duint64 id, const DString &url, const DString &ip)
+void lms_verify_hooks::on_stop(kernel_request *req, duint64 id, const DString &url, const DString &ip)
 {
     m_id = id;
 
@@ -254,37 +247,21 @@ int lms_verify_hooks::onReadProcess()
 
     global_context->update_id(m_fd);
 
-    if ((ret = read_header()) != ERROR_SUCCESS) {
-        log_error("hook verify read http header failed. ret=%d", ret);
-        return ret;
+    if ((ret = m_reader->service()) != ERROR_SUCCESS) {
+        if (ret != SOCKET_EAGAIN) {
+            log_error("hook read http response failed. ret=%d", ret);
+            return ret;
+        }
     }
 
-    if ((ret = read_body()) != ERROR_SUCCESS) {
-        log_error("hook verify read http body failed. ret=%d", ret);
-        return ret;
-    }
-
-    if ((ret = parse_body()) != ERROR_SUCCESS) {
-        return ret;
-    }
-
-    return ret;
+    return parse_body();
 }
 
 int lms_verify_hooks::onWriteProcess()
 {
-    int ret = ERROR_SUCCESS;
-
     global_context->update_id(m_fd);
 
-    do_post();
-
-    if ((ret = writeData()) != ERROR_SUCCESS) {
-        ret = ERROR_TCP_SOCKET_WRITE_FAILED;
-        return ret;
-    }
-
-    return ret;
+    return do_post();
 }
 
 void lms_verify_hooks::onReadTimeOutProcess()
@@ -311,44 +288,44 @@ void lms_verify_hooks::lookup_host()
 {
     DHostInfo *h = new DHostInfo(m_event);
     h->setFinishedHandler(HOST_CALLBACK(&lms_verify_hooks::onHost));
-    h->lookupHost(m_uri.get_host());
+    h->setErrorHandler(HOST_CALLBACK(&lms_verify_hooks::onHostError));
+
+    if (!h->lookupHost(m_uri.get_host())) {
+        h->close();
+        release();
+    }
 }
 
 void lms_verify_hooks::onHost(const DStringList &ips)
 {
-    global_context->update(m_id);
+    int ret = ERROR_SUCCESS;
 
-    if (ips.empty()) {
-        log_error("hook verify dns host is empty");
-        release();
-    }
+    global_context->update(m_id);
 
     DString ip = ips.at(0);
     int port = m_uri.get_port();
 
-    int ret = connectToHost(ip.c_str(), port);
-
-    if (ret == EINPROGRESS) {
-        return;
-    } else if (ret != ERROR_SUCCESS) {
-        ret = ERROR_TCP_SOCKET_CONNECT;
-        log_error("hook verify connect to host failed. ip=%s, port=%d, ret=%d", ip.c_str(), port, ret);
-        release();
-    } else {
-        do_post();
-
-        if ((ret = writeData()) != ERROR_SUCCESS) {
-            ret = ERROR_TCP_SOCKET_WRITE_FAILED;
-            log_error("hook verify write data failed. ret=%d", ret);
+    if ((ret = connectToHost(ip.c_str(), port)) != ERROR_SUCCESS) {
+        if (ret != SOCKET_EINPROGRESS) {
+            ret = ERROR_TCP_SOCKET_CONNECT;
+            log_error("hook verify connect to host failed. ip=%s, port=%d, ret=%d", ip.c_str(), port, ret);
             release();
         }
     }
 }
 
-void lms_verify_hooks::do_post()
+void lms_verify_hooks::onHostError(const DStringList &ips)
 {
+    log_error("hook get host failed. host=%s, ips_count=%d", m_uri.get_host().c_str(), ips.size());
+    release();
+}
+
+int lms_verify_hooks::do_post()
+{
+    int ret = ERROR_SUCCESS;
+
     if (m_post_started) {
-        return;
+        return ret;
     }
 
     global_context->set_id(m_fd);
@@ -356,8 +333,8 @@ void lms_verify_hooks::do_post()
 
     log_trace("hook verify client_id, hook_id: %llu[%llu]", m_id, global_context->get_id());
 
-    setRecvTimeOut(m_timeout);
-    setSendTimeOut(m_timeout);
+    setReadTimeOut(m_timeout);
+    setWriteTimeOut(m_timeout);
 
     DHttpHeader header;
     header.setContentLength(m_value.length());
@@ -373,138 +350,44 @@ void lms_verify_hooks::do_post()
     memcpy(response->data, value.data(), value.size());
     response->length = value.size();
 
-    SendBuffer *buf = new SendBuffer;
-    buf->chunk = response;
-    buf->len = response->length;
-    buf->pos = 0;
-
-    addData(buf);
-
     m_post_started = true;
+
+    if ((ret = write(response, response->length)) != ERROR_SUCCESS) {
+        log_error_eagain(ret, ERROR_HTTP_WRITE_VERIFY_VALUE, "write verify data failed. ret=%d", ret);
+        return ret;
+    }
+
+    return ret;
 }
 
 void lms_verify_hooks::release()
 {
     global_context->update_id(m_fd);
 
-    if (m_schedule == HookSchedule::Release) {
-        return;
-    }
-
     verify();
 
-    m_schedule = HookSchedule::Release;
+    global_context->delete_id(m_fd);
 
-    closeSocket();
-}
-
-int lms_verify_hooks::read_header()
-{
-    int ret = ERROR_SUCCESS;
-
-    if (m_schedule != HookSchedule::Header) {
-        return ret;
-    }
-
-    int len = getBufferLen();
-
-    MemoryChunk *buf = DMemPool::instance()->getMemory(len);
-    DAutoFree(MemoryChunk, buf);
-
-    if (copyData(buf->data, len) < 0) {
-        ret = ERROR_TCP_SOCKET_COPY_FAILED;
-        log_error("hook verify copy http header data filed. ret=%d", ret);
-        return ret;
-    }
-
-    buf->length = len;
-
-    if (m_parser->parse(buf->data, buf->length) < 0) {
-        ret = ERROR_HTTP_HEADER_PARSER;
-        log_error("hook verify parse http header failed. ret=%d", ret);
-        return ret;
-    }
-
-    if (m_parser->completed()) {
-        DString content(buf->data, buf->length);
-
-        DString delim("\r\n\r\n");
-        size_t index = content.find(delim);
-
-        if (index != DString::npos) {
-            DString body = content.substr(0, index + delim.size());
-
-            MemoryChunk *chunk = DMemPool::instance()->getMemory(body.size());
-            DAutoFree(MemoryChunk, chunk);
-
-            if (readData(chunk->data, body.size()) < 0) {
-                ret = ERROR_TCP_SOCKET_READ_FAILED;
-                log_error("hook verify read http header for reduce data failed. ret=%d", ret);
-                return ret;
-            }
-        }
-
-        duint16 status_code = m_parser->statusCode();
-
-        if (status_code != 200) {
-            log_error("hook verify error code is not 200");
-            release();
-        } else {
-            m_content_length = m_parser->feild("Content-Length").toInt();
-            DString val = m_parser->feild("Transfer-Encoding");
-            m_reader->set_chunked((val == "chunked") ? true : false);
-        }
-
-        m_schedule = HookSchedule::Body;
-    }
-
-    return ret;
-}
-
-int lms_verify_hooks::read_body()
-{
-    int ret = ERROR_SUCCESS;
-
-    if (m_schedule != HookSchedule::Body) {
-        return ret;
-    }
-
-    if ((ret = m_reader->grow()) != ERROR_SUCCESS) {
-        if (ret == ERROR_HTTP_READ_EOF || m_reader->get_body_len() == m_content_length) {
-            m_schedule = HookSchedule::Completed;
-            return ERROR_SUCCESS;
-        }
-        log_error("hook verify read http body failed. ret=%d", ret);
-        return ret;
-    }
-
-    if (m_reader->get_body_len() == m_content_length) {
-        m_schedule = HookSchedule::Completed;
-    }
-
-    return ret;
+    close();
 }
 
 int lms_verify_hooks::parse_body()
 {
     int ret = ERROR_SUCCESS;
 
-    if (m_schedule != HookSchedule::Completed) {
+    if (m_reader->getLength() < m_content_length) {
         return ret;
     }
 
-    int len = m_reader->get_body_len();
-
-    MemoryChunk *chunk = DMemPool::instance()->getMemory(len);
+    MemoryChunk *chunk = DMemPool::instance()->getMemory(m_content_length);
     DAutoFree(MemoryChunk, chunk);
 
-    if (m_reader->read_body(chunk->data, len) < 0) {
-        ret = ERROR_HTTP_READ_BODY;
-        log_error("hook verify read response failed. ret=%d", ret);
+    if (m_reader->readBody(chunk->data, m_content_length) != ERROR_SUCCESS) {
+        log_error_eagain(ret, ERROR_HTTP_READ_BODY, "hook verify read response failed. ret=%d", ret);
         return ret;
     }
 
-    DString str(chunk->data, len);
+    DString str(chunk->data, m_content_length);
     str = str.trimmed();
     if (!str.contains("{")) {
         ret = ERROR_RESPONSE_CODE;
@@ -543,6 +426,7 @@ int lms_verify_hooks::parse_body()
     }
 
     m_result = true;
+
     release();
 
     return ret;
@@ -554,4 +438,28 @@ void lms_verify_hooks::verify()
         m_handler(m_result);
         m_handler = NULL;
     }
+}
+
+int lms_verify_hooks::onHttpHeader(DHttpParser *parser)
+{
+    int ret = ERROR_SUCCESS;
+
+    duint16 status_code = parser->statusCode();
+
+    if (status_code != 200) {
+        ret = ERROR_HTTP_VERIFY_STATUS_CODE;
+        log_error("hook verify error code is not 200. ret=%d", ret);
+        return ret;
+    } else {
+        DString ch = parser->feild("Content-Length");
+        if (!ch.empty()) {
+            m_content_length = ch.toInt();
+        } else {
+            ret = ERROR_HTTP_VERIFY_NO_CONTENT_LENGTH;
+            log_error("hook verify no Content-Length");
+            return ret;
+        }
+    }
+
+    return ret;
 }

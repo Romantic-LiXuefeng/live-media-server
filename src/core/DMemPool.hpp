@@ -2,11 +2,9 @@
 #define DMEMPOOL_HPP
 
 #include "DSpinLock.hpp"
-#include "DGlobal.hpp"
-#include "DString.hpp"
-
 #include <map>
-#include <list>
+
+class MemoryBlock;
 
 class MemoryChunk
 {
@@ -15,20 +13,20 @@ public:
     ~MemoryChunk();
 
 public:
-    // 实际使用的大小
+    // 实际使用的大小，存在的意义主要是为了socket读时分配的大小和实际读出的大小不一致
     int length;
     // 内存块的地址
     char *data;
     // 内存块的大小
     int size;
-    // 所属内存块的号码
-    duint64 number;
+
+    MemoryBlock *block;
 };
 
 class MemoryBlock
 {
 public:
-    MemoryBlock();
+    MemoryBlock(int size);
     ~MemoryBlock();
 
 public:
@@ -36,7 +34,7 @@ public:
     char *data;
     //当前使用的内存位置
     int pos;
-    // 剩余的数量
+    // 剩余的数量，一个block会分配出多个chunk，chunk回收之后只有count等于0时block才会进入空闲
     int count;
 };
 
@@ -51,20 +49,23 @@ public:
 
     static DMemPool *instance();
 
+    void setEnable(bool value);
+
     void print();
 
-private:
-    std::map<duint64, MemoryBlock*> m_pools;
-    std::list<duint64> m_idles;
+    void reduce();
 
-    duint64 m_total_count;
-    duint64 m_cur_count;
+private:
+    std::multimap<int, MemoryBlock*> m_pools;
+    std::map<MemoryBlock*, int> m_keys;
 
     DSpinLock m_mutex;
 
 private:
     static DMemPool *m_instance;
 
+    bool m_enable;
+    int m_block_size;
 };
 
 #endif // DMEMPOOL_HPP

@@ -5,8 +5,7 @@
 #include "DEvent.hpp"
 #include "DTcpSocket.hpp"
 
-#include "rtmp_global.hpp"
-#include "lms_gop_cache.hpp"
+#include "kernel_global.hpp"
 
 class lms_conn_base : public DTcpSocket
 {
@@ -22,12 +21,8 @@ public:
     DEvent *getEvent();
     pthread_t getThread();
 
-    void setGopCache(lms_gop_cache *gop);
-    lms_gop_cache *getGopCache();
-
 protected:
     DThread *m_thread;
-    lms_gop_cache *m_gop_cache;
 
 };
 

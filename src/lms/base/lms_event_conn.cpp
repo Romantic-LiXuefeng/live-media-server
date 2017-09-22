@@ -1,6 +1,6 @@
 #include "lms_event_conn.hpp"
 #include "kernel_log.hpp"
-
+#include "kernel_errno.hpp"
 #include <sys/eventfd.h>
 #include <errno.h>
 
@@ -8,7 +8,7 @@ lms_event_conn::lms_event_conn(DEvent *event)
     : m_fd(-1)
     , m_event(event)
 {
-    gop_cache = new lms_gop_cache();
+
 }
 
 lms_event_conn::~lms_event_conn()
@@ -18,22 +18,27 @@ lms_event_conn::~lms_event_conn()
     for (int i = 0; i < (int)m_msgs.size(); ++i) {
         DFree(m_msgs.at(i));
     }
-    m_msgs.clear();
-
-    DFree(gop_cache);
+    m_msgs.clear();    
 }
 
-int lms_event_conn::open()
+bool lms_event_conn::open()
 {
     m_fd = eventfd(0, EFD_NONBLOCK);
-    m_event->add(this);
+    if (m_fd == -1) {
+        return false;
+    }
 
-    return m_fd;
+    if (!m_event->add(this, m_fd)) {
+        log_error("add eventfd to epoll failed. fd=%d", m_fd);
+        return false;
+    }
+
+    return true;
 }
 
 void lms_event_conn::close()
 {
-    m_event->del(this);
+    m_event->del(this, m_fd);
 
     if (m_fd != -1) {
         ::close(m_fd);
@@ -78,13 +83,10 @@ bool lms_event_conn::empty()
     return m_sockets.empty();
 }
 
-int lms_event_conn::GetDescriptor()
-{
-    return m_fd;
-}
-
 int lms_event_conn::onRead()
 {
+    int ret = ERROR_SUCCESS;
+
     duint64 value = 0;
 
     ::read(m_fd, &value, sizeof(duint64));
@@ -101,18 +103,23 @@ int lms_event_conn::onRead()
     m_lock.unlock();
 
     std::map<int, lms_conn_base*>::iterator it;
-    CommonMessage *msg = NULL;
-    lms_conn_base *conn = NULL;
 
     for (int i = 0; i < (int)msgs.size(); ++i)
     {
-        msg = msgs.at(i);
+        CommonMessage *msg = msgs.at(i);
 
-        gop_cache->cache(msg);
+        it = m_sockets.begin();
+        for(;it != m_sockets.end();) {
+            lms_conn_base *conn = it->second;
 
-        for(it = m_sockets.begin(); it != m_sockets.end(); ++it) {
-            conn = it->second;
-            conn->Process(msg);
+            ret = conn->Process(msg);
+            if ((ret != ERROR_SUCCESS) && (ret != SOCKET_EAGAIN)) {
+                conn->release();
+                m_sockets.erase(it++);
+                continue;
+            }
+
+            it++;
         }
 
         DFree(msg);

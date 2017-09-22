@@ -5,4 +5,6 @@
 
 DString get_peer_ip(int fd);
 
+bool check_ip(const DString &str);
+
 #endif // KERNEL_UTILITY_HPP

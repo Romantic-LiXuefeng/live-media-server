@@ -16,7 +16,7 @@ DSignal::~DSignal()
 
 }
 
-void DSignal::open(int sig)
+bool DSignal::open(int sig)
 {
     m_sig = sig;
 
@@ -28,12 +28,15 @@ void DSignal::open(int sig)
 
     m_fd = signalfd(-1, &mask, SFD_NONBLOCK | SFD_CLOEXEC);
 
-    m_event->add(this);
+    if (!m_event->add(this, m_fd)) {
+        return false;
+    }
+    return true;
 }
 
 void DSignal::close()
 {
-    m_event->del(this);
+    m_event->del(this, m_fd);
 
     if (m_fd != -1) {
         ::close(m_fd);

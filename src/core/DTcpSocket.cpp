@@ -11,158 +11,70 @@
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
 
-#define LMS_ERROR   -1
-#define LMS_CLOSE   -2
-
-DTcpSocket::DTcpSocket(DEvent *event, int fd)
+DTcpSocket::DTcpSocket(DEvent *event)
     : m_event(event)
-    , m_fd(fd)
-    , m_buffer_len(0)
-    , m_write_buffer_len(0)
-    , m_recv_pos(0)
-    , m_recv_size(0)
-    , m_send_pos(0)
-    , m_write_eagain(false)
-    , m_send_timeout(-1)
-    , m_recv_timeout(-1)
+    , m_fd(-1)
     , m_connected(true)
+    , m_read_buffer_length(0)
+    , m_read_pos(0)
+    , m_read_total_size(0)
+    , m_write_pos(0)
+    , m_write_buffer_len(0)
+    , m_write_eagain(false)
+    , m_read_timeout(-1)
+    , m_write_timeout(-1)
 {
 
 }
 
-DTcpSocket::DTcpSocket(DEvent *event)
+DTcpSocket::DTcpSocket(DEvent *event, int fd)
     : m_event(event)
-    , m_fd(-1)
-    , m_buffer_len(0)
-    , m_write_buffer_len(0)
-    , m_recv_pos(0)
-    , m_recv_size(0)
-    , m_send_pos(0)
-    , m_write_eagain(false)
-    , m_send_timeout(-1)
-    , m_recv_timeout(-1)
+    , m_fd(fd)
     , m_connected(true)
+    , m_read_buffer_length(0)
+    , m_read_pos(0)
+    , m_read_total_size(0)
+    , m_write_pos(0)
+    , m_write_buffer_len(0)
+    , m_write_eagain(false)
+    , m_read_timeout(-1)
+    , m_write_timeout(-1)
 {
 
 }
 
 DTcpSocket::~DTcpSocket()
 {
-    for (int i = 0; i < (int)m_recv_chunks.size(); ++i) {
-        DFree(m_recv_chunks.at(i));
+    for (int i = 0; i < m_read_chunks.size(); ++i) {
+        DFree(m_read_chunks.at(i));
     }
-    m_recv_chunks.clear();
+    m_read_chunks.clear();
 
-    for (int i = 0; i < (int)m_send_chunks.size(); ++i) {
-        DFree(m_send_chunks.at(i));
+    for (int i = 0; i < m_write_chunks.size(); ++i) {
+        DFree(m_write_chunks.at(i));
     }
-    m_send_chunks.clear();
-}
-
-int DTcpSocket::connectToHost(const char *ip, int port)
-{
-    if ((m_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0)) == -1) {
-        m_event->remove(this);
-        return -1;
-    }
-
-    struct sockaddr_in serv_addr;
-    memset(&serv_addr, 0, sizeof(serv_addr));
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_addr.s_addr = inet_addr(ip);
-    serv_addr.sin_port = htons(port);
-
-    m_event->add(this);
-
-    if (connect(m_fd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1) {
-        if (errno != EINPROGRESS) {
-            return -2;
-        } else {
-            m_connected = false;
-            return EINPROGRESS;
-        }
-    }
-
-    return 0;
-}
-
-void DTcpSocket::closeSocket()
-{
-    if (m_fd != -1) {
-        m_event->delReadTimeOut(this);
-        m_event->delWriteTimeOut(this);
-
-        m_event->del(this);
-
-        ::close(m_fd);
-        m_fd = -1;
-    }
-}
-
-bool DTcpSocket::setTcpNodelay(bool value)
-{
-    int flags = (value == true) ? 1 : 0;
-    if (setsockopt(m_fd, IPPROTO_TCP, TCP_NODELAY, (void *)&flags, sizeof(flags)) != 0) {
-        return false;
-    }
-    return true;
-}
-
-bool DTcpSocket::setKeepAlive(bool value)
-{
-    int flags = (value == true) ? 1 : 0;
-    if (setsockopt(m_fd, SOL_SOCKET, SO_KEEPALIVE, (void *)&flags, sizeof(flags)) != 0) {
-        return false;
-    }
-    return true;
-}
-
-void DTcpSocket::setNonblocking()
-{
-    int op = fcntl(m_fd, F_GETFL, 0);
-    fcntl(m_fd, F_SETFL, op | O_NONBLOCK);
-}
-
-void DTcpSocket::setSendTimeOut(dint64 usec)
-{
-    m_send_timeout = usec;
-
-    if (usec == -1) {
-        m_event->delWriteTimeOut(this);
-    }
-}
-
-void DTcpSocket::setRecvTimeOut(dint64 usec)
-{
-    m_recv_timeout = usec;
-
-    if (usec == -1) {
-        m_event->delReadTimeOut(this);
-    }
-}
-
-int DTcpSocket::GetDescriptor()
-{
-    return m_fd;
+    m_write_chunks.clear();
 }
 
 int DTcpSocket::onRead()
 {
-    int ret = 0;
+    int ret = SOCKET_SUCCESS;
 
-    ret = grow();
-    if (ret == LMS_CLOSE) {
+    ret = readFromFd();
+
+    if (ret == SOCKET_CLOSE) {
         onCloseProcess();
         return ret;
-    }
-    if (ret == LMS_ERROR) {
+    } else if (ret == SOCKET_ERROR) {
         onErrorProcess();
         return ret;
-    }
-
-    if ((ret = onReadProcess()) != 0) {
-        onErrorProcess();
-        return ret;
+    } else {
+        if ((ret = onReadProcess()) != SOCKET_SUCCESS) {
+            if (ret != SOCKET_EAGAIN) {
+                onErrorProcess();
+            }
+            return (ret == SOCKET_EAGAIN) ? SOCKET_SUCCESS : ret;
+        }
     }
 
     return ret;
@@ -170,18 +82,30 @@ int DTcpSocket::onRead()
 
 int DTcpSocket::onWrite()
 {
-    int ret = 0;
+    int ret = SOCKET_SUCCESS;
 
-    if ((ret = ConnectStatus()) != 0) {
+    if ((ret = checkConnectStatus()) != SOCKET_SUCCESS) {
         onErrorProcess();
         return ret;
     }
 
     m_write_eagain = false;
 
-    if ((ret = onWriteProcess()) != 0) {
-        onErrorProcess();
-        return ret;
+    // 发送时会优先发送缓冲区的数据，如果在发送缓冲区数据时遇到eagain，直接返回，不触发回调
+    if (m_write_buffer_len > 0) {
+        if ((ret = flush()) != SOCKET_SUCCESS) {
+            if (ret != SOCKET_EAGAIN) {
+                onErrorProcess();
+            }
+            return (ret == SOCKET_EAGAIN) ? SOCKET_SUCCESS : ret;
+        }
+    }
+
+    if ((ret = onWriteProcess()) != SOCKET_SUCCESS) {
+        if (ret != SOCKET_EAGAIN) {
+            onErrorProcess();
+        }
+        return (ret == SOCKET_EAGAIN) ? SOCKET_SUCCESS : ret;
     }
 
     return ret;
@@ -197,48 +121,186 @@ void DTcpSocket::onWriteTimeOut()
     onWriteTimeOutProcess();
 }
 
-int DTcpSocket::onReadProcess()
+int DTcpSocket::GetDescriptor()
 {
-    return 0;
+    return m_fd;
 }
 
-int DTcpSocket::onWriteProcess()
+int DTcpSocket::connectToHost(const char *ip, int port)
 {
-    return 0;
+    if (socket() == SOCKET_ERROR) {
+        return SOCKET_ERROR;
+    }
+
+    // 如果返回SOCKET_EINPROGRESS，属于正确，需要继续加入到epoll中
+    if (connect(ip, port) == SOCKET_ERROR) {
+        return SOCKET_ERROR;
+    }
+
+    if (!m_event->add(this, m_fd)) {
+        return SOCKET_ERROR;
+    }
+
+    return SOCKET_SUCCESS;
 }
 
-void DTcpSocket::onReadTimeOutProcess()
+bool DTcpSocket::getConnected()
 {
-    closeSocket();
+    return m_connected;
 }
 
-void DTcpSocket::onWriteTimeOutProcess()
+void DTcpSocket::close()
 {
-    closeSocket();
+    m_event->delReadTimeOut(this);
+    m_event->delWriteTimeOut(this);
+    m_event->del(this, m_fd);
+
+    if (m_fd != -1) {
+        ::close(m_fd);
+        m_fd = -1;
+    }
 }
 
-void DTcpSocket::onErrorProcess()
+int DTcpSocket::read(char *data, int length)
 {
-    closeSocket();
+    if (length < 0) {
+        return SOCKET_ERROR;
+    } else if (length == 0 || m_read_buffer_length < length) {
+        return SOCKET_EAGAIN;
+    }
+
+    return readDataFromBuffer(data, length);
 }
 
-void DTcpSocket::onCloseProcess()
+int DTcpSocket::copy(char *data, int length)
 {
-    closeSocket();
+    if (length < 0) {
+        return SOCKET_ERROR;
+    } else if (length == 0 || m_read_buffer_length < length) {
+        return SOCKET_EAGAIN;
+    }
+
+    return copyDataFromBuffer(data, length);
 }
 
-int DTcpSocket::grow()
+int DTcpSocket::getReadBufferLength() const
 {
-    int ret = 0;
+    return m_read_buffer_length;
+}
 
+int DTcpSocket::checkConnectStatus()
+{
+    if (m_connected) {
+        return SOCKET_SUCCESS;
+    }
+
+    int err;
+    int errlen = sizeof(err);
+    if (getsockopt(m_fd, SOL_SOCKET, SO_ERROR, &err, (socklen_t*)&errlen) == -1) {
+        return SOCKET_ERROR;
+    }
+
+    if (err != 0) {
+        return SOCKET_ERROR;
+    }
+
+    m_connected = true;
+
+    return SOCKET_SUCCESS;
+}
+
+duint64 DTcpSocket::getTotalReadSize() const
+{
+    return m_read_total_size;
+}
+
+int DTcpSocket::write(DSharedPtr<MemoryChunk> chunk, int length, int pos)
+{
+    add(chunk, length, pos);
+
+    return flush();
+}
+
+int DTcpSocket::flush()
+{
+    return writeToFd();
+}
+
+void DTcpSocket::add(DSharedPtr<MemoryChunk> chunk, int length, int pos)
+{
+    SendBuffer *buf = new SendBuffer;
+
+    buf->chunk = chunk;
+    buf->pos = pos;
+    buf->len = length;
+
+    m_write_buffer_len += length;
+    m_write_chunks.push_back(buf);
+}
+
+bool DTcpSocket::writeEagain()
+{
+    return m_write_eagain;
+}
+
+void DTcpSocket::setReadTimeOut(dint64 usec)
+{
+    m_read_timeout = usec;
+
+    if (usec == -1) {
+        m_event->delReadTimeOut(this);
+    }
+}
+
+void DTcpSocket::setWriteTimeOut(dint64 usec)
+{
+    m_write_timeout = usec;
+
+    if (usec == -1) {
+        m_event->delWriteTimeOut(this);
+    }
+}
+
+bool DTcpSocket::setTcpNodelay(bool value)
+{
+    int flags = (value == true) ? 1 : 0;
+    if (setsockopt(m_fd, IPPROTO_TCP, TCP_NODELAY, (void *)&flags, sizeof(flags)) < 0) {
+        return false;
+    }
+
+    return true;
+}
+
+bool DTcpSocket::setKeepAlive(bool value)
+{
+    int flags = (value == true) ? 1 : 0;
+    if (setsockopt(m_fd, SOL_SOCKET, SO_KEEPALIVE, (void *)&flags, sizeof(flags)) < 0) {
+        return false;
+    }
+
+    return true;
+}
+
+bool DTcpSocket::setNonblocking()
+{
+    int op = fcntl(m_fd, F_GETFL, 0);
+    if (fcntl(m_fd, F_SETFL, op | O_NONBLOCK) == -1) {
+        return false;
+    }
+
+    return true;
+}
+
+int DTcpSocket::readFromFd()
+{
     while (1) {
         MemoryChunk *chunk = DMemPool::instance()->getMemory(4096);
 
-        int nread = read(m_fd, chunk->data, 4096);
+        int nread = ::read(m_fd, chunk->data, 4096);
 
         if (nread == 0) {
             DFree(chunk);
-            return LMS_CLOSE;
+            return SOCKET_CLOSE;
         }
 
         if (nread < 0) {
@@ -250,88 +312,74 @@ int DTcpSocket::grow()
             if (errno == EINTR) {
                 continue;
             }
-            return LMS_ERROR;
+            return SOCKET_ERROR;
         }
 
         chunk->length = nread;
-        m_recv_chunks.push_back(chunk);
+        m_read_chunks.push_back(chunk);
 
-        m_recv_size += nread;
+        m_read_total_size += nread;
 
-        m_buffer_len += nread;
+        m_read_buffer_length += nread;
+
+        updateTimeOut(false);
     }
 
-    updateTimeOut(false);
-
-    return ret;
+    return SOCKET_EAGAIN;
 }
 
-int DTcpSocket::getBufferLen()
+int DTcpSocket::writeToFd()
 {
-    return m_buffer_len;
-}
-
-int DTcpSocket::readData(char *data, int len)
-{
-    int ret = 0;
-    int length = len;
-    int pos = 0;
+    if (m_write_eagain) {
+        return SOCKET_EAGAIN;
+    }
 
     while (1) {
-        if (m_recv_chunks.empty() && ret == 0) {
-            ret = -1;
+        if (m_write_chunks.empty()){
             break;
         }
 
-        if (length <= 0) {
-            break;
-        }
+        int iovcnt = DMin(m_write_chunks.size(), 64);
+        struct iovec iovs[iovcnt];
+        outputBufferToIovec(iovs, iovcnt);
 
-        MemoryChunk *chunk = m_recv_chunks.front();
-        int rest = chunk->length - m_recv_pos;
+eintr:
+        int nwrite = writev(m_fd, iovs, iovcnt);
+        if (nwrite > 0) {
+            m_write_buffer_len -= nwrite;
+            outpufBufferUpdate(nwrite);
 
-        if (length >= rest) {
-            memcpy(data + pos, chunk->data + m_recv_pos, rest);
-            length -= rest;
-            pos += rest;
-            m_recv_pos = 0;
-            ret += rest;
-
-            m_buffer_len -= rest;
-
-            m_recv_chunks.pop_front();
-            DFree(chunk);
+            updateTimeOut(true);
         } else {
-            memcpy(data + pos, chunk->data + m_recv_pos, length);
-            m_recv_pos += length;
-            ret += length;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                m_write_eagain = true;
+                return SOCKET_EAGAIN;
+            }
 
-            m_buffer_len -= length;
+            if (errno == EINTR) {
+                goto eintr;
+            }
 
-            break;
+            return SOCKET_ERROR;
         }
     }
 
-    return ret;
+    return SOCKET_SUCCESS;
 }
 
-int DTcpSocket::copyData(char *data, int len)
+int DTcpSocket::copyDataFromBuffer(char *data, int len)
 {
     int ret = 0;
     int length = len;
     int pos = 0;
-    int temp_pos = m_recv_pos;
+    int temp_pos = m_read_pos;
 
-    if (m_buffer_len < len) {
-        return -1;
-    }
-
-    for (int i = 0; i < (int)m_recv_chunks.size(); ++i) {
+    for (int i = 0; i < (int)m_read_chunks.size(); ++i) {
         if (length <= 0) {
             break;
         }
 
-        MemoryChunk *chunk = m_recv_chunks.at(i);
+        MemoryChunk *chunk = m_read_chunks.at(i);
         int rest = chunk->length - temp_pos;
 
         if (length >= rest) {
@@ -348,67 +396,48 @@ int DTcpSocket::copyData(char *data, int len)
         }
     }
 
-    return ret;
+    return (ret == len) ? 0 : SOCKET_ERROR;
 }
 
-duint64 DTcpSocket::get_recv_size()
-{
-    return m_recv_size;
-}
-
-void DTcpSocket::addData(SendBuffer *data)
-{
-    m_write_buffer_len += data->len;
-    m_send_chunks.push_back(data);
-}
-
-int DTcpSocket::writeData()
+int DTcpSocket::readDataFromBuffer(char *data, int len)
 {
     int ret = 0;
-
-    if (m_write_eagain || m_fd == -1) {
-        return ret;
-    }
+    int length = len;
+    int pos = 0;
 
     while (1) {
-        if (m_send_chunks.empty()){
+        if (length <= 0) {
             break;
         }
 
-        int iovcnt = DMin(m_send_chunks.size(), 64);
-        struct iovec iovs[iovcnt];
-        outputBufferToIovec(iovs, iovcnt);
+        MemoryChunk *chunk = m_read_chunks.front();
+        int rest = chunk->length - m_read_pos;
 
-eintr:
-        int nwrite = writev(m_fd, iovs, iovcnt);
-        if (nwrite > 0) {
-            m_write_buffer_len -= nwrite;
-            outpufBufferUpdate(nwrite);
+        if (length >= rest) {
+            memcpy(data + pos, chunk->data + m_read_pos, rest);
+            length -= rest;
+            pos += rest;
+            ret += rest;
+
+            m_read_pos = 0;
+            m_read_buffer_length -= rest;
+            m_read_chunks.pop_front();
+            DFree(chunk);
         } else {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                m_write_eagain = true;
-                break;
-            }
+            memcpy(data + pos, chunk->data + m_read_pos, length);
+            ret += length;
 
-            if (errno == EINTR) {
-                goto eintr;
-            }
+            m_read_pos += length;
+            m_read_buffer_length -= length;
 
-            return LMS_ERROR;
+            break;
         }
     }
 
-    updateTimeOut(true);
-
-    return ret;
+    return (ret == len) ? 0 : SOCKET_ERROR;
 }
 
-int DTcpSocket::getWriteBufferLen()
-{
-    return m_write_buffer_len;
-}
-
-void DTcpSocket::outputBufferToIovec(struct iovec *iovs, int iovcnt)
+void DTcpSocket::outputBufferToIovec(iovec *iovs, int iovcnt)
 {
     struct iovec *iov;
     SendBuffer *buf;
@@ -416,12 +445,12 @@ void DTcpSocket::outputBufferToIovec(struct iovec *iovs, int iovcnt)
 
     for (int i = 0; i < iovcnt; ++i) {
         iov = &iovs[i];
-        buf = m_send_chunks.at(i);
+        buf = m_write_chunks.at(i);
         chunk = buf->chunk.get();
 
         if (i == 0) {
-            iov->iov_base = chunk->data + buf->pos + m_send_pos;
-            iov->iov_len  = buf->len - m_send_pos;
+            iov->iov_base = chunk->data + buf->pos + m_write_pos;
+            iov->iov_len  = buf->len - m_write_pos;
         } else {
             iov->iov_base = chunk->data + buf->pos;
             iov->iov_len  = buf->len;
@@ -435,67 +464,73 @@ void DTcpSocket::outpufBufferUpdate(int nwrite)
     int buf_len;
     int rest = nwrite;
     int count = 0;
-    int size = m_send_chunks.size();
+    int size = m_write_chunks.size();
 
     for (int i = 0; i < size; ++i) {
-        buf = m_send_chunks.at(i);
-        buf_len = buf->len - m_send_pos;
+        buf = m_write_chunks.at(i);
+        buf_len = buf->len - m_write_pos;
 
         if (i == 0 && nwrite < buf_len) {
-            m_send_pos += nwrite;
+            m_write_pos += nwrite;
             break;
         }
 
         if (rest >= buf_len) {
             rest = rest - buf_len;
-            m_send_pos = 0;
+            m_write_pos = 0;
 
             count++;
             DFree(buf);
         } else {
-            m_send_pos = rest;
+            m_write_pos = rest;
             break;
         }
     }
 
     if (count != 0) {
-        m_send_chunks.erase(m_send_chunks.begin(), m_send_chunks.begin() + count);
+        m_write_chunks.erase(m_write_chunks.begin(), m_write_chunks.begin() + count);
     }
 }
 
 void DTcpSocket::updateTimeOut(bool send)
 {
     if (send) {
-        if (m_send_timeout == -1) {
+        if (m_write_timeout == -1) {
             return;
         }
-        m_event->addWriteTimeOut(this, m_send_timeout);
+        m_event->addWriteTimeOut(this, m_write_timeout);
     } else {
-        if (m_recv_timeout == -1) {
+        if (m_read_timeout == -1) {
             return;
         }
-        m_event->addReadTimeOut(this, m_recv_timeout);
+        m_event->addReadTimeOut(this, m_read_timeout);
     }
 }
 
-int DTcpSocket::ConnectStatus()
+int DTcpSocket::socket()
 {
-    if (m_connected) {
-        return 0;
+    if ((m_fd = ::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0)) == -1) {
+        return SOCKET_ERROR;
     }
 
-    int err;
-    int errlen = sizeof(err);
-    if (getsockopt(m_fd, SOL_SOCKET, SO_ERROR, &err, (socklen_t*)&errlen) == -1) {
-        return -1;
-    }
-
-    if (err != 0) {
-        return err;
-    }
-
-    m_connected = true;
-
-    return 0;
+    return SOCKET_SUCCESS;
 }
 
+int DTcpSocket::connect(const char *ip, int port)
+{
+    struct sockaddr_in serv_addr;
+    memset(&serv_addr, 0, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_addr.s_addr = inet_addr(ip);
+    serv_addr.sin_port = htons(port);
+
+    if (::connect(m_fd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1) {
+        if (errno == EINPROGRESS) {
+            m_connected = false;
+            return SOCKET_EINPROGRESS;
+        }
+        return SOCKET_ERROR;
+    }
+
+    return SOCKET_SUCCESS;
+}

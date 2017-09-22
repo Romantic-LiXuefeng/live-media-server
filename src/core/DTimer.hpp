@@ -20,7 +20,7 @@ public:
 
     void setTimerEvent(TimerEvent handler);
 
-    void start(int msec);
+    bool start(int msec);
     void stop();
     void setSingleShot(bool singleShot);
 

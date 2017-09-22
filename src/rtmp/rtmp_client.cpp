@@ -4,65 +4,65 @@
 
 rtmp_client::rtmp_client(DTcpSocket *socket)
     : m_socket(socket)
-    , m_hs(false)
-    , m_ch(false)
     , m_in_chunk_size(128)
     , m_out_chunk_size(128)
-    , m_window_ack_size(2500000)
-    , m_window_response_size(0)
-    , m_window_last_ack(0)
-    , m_window_total_size(0)
-    , m_player_buffer_length(3000)
+    , m_player_buffer_length(1000)
     , m_stream_id(1)
-    , m_can_publish(false)
-    , m_timeout(30 * 1000 * 1000)
-    , m_schedule(RtmpClientSchedule::Default)
     , m_publish(false)
     , m_av_handler(NULL)
     , m_metadata_handler(NULL)
+    , m_publish_start_handler(NULL)
+    , m_play_start_handler(NULL)
+    , m_type(HandShake)
 {
-    m_hs_handler = new rtmp_handshake(m_socket);
-    m_chunk_reader = new rtmp_chunk_read(m_socket);
-    m_chunk_writer = new rtmp_chunk_write(m_socket);
-    m_req = new rtmp_request();
+    m_hs = new rtmp_handshake(m_socket);
+    m_hs->set_handshake_with_server_type(false);
+
+    m_ch = new RtmpChunk(m_socket);
+    m_req = new kernel_request();
 }
 
 rtmp_client::~rtmp_client()
 {
-    DFree(m_hs_handler);
-    DFree(m_chunk_reader);
-    DFree(m_chunk_writer);
+    DFree(m_hs);
+    DFree(m_ch);
     DFree(m_req);
 }
 
-int rtmp_client::do_process()
+int rtmp_client::service()
 {
     int ret = ERROR_SUCCESS;
 
-    while (m_socket->getBufferLen() > 0) {
-        if ((ret = handshake_and_connect()) != ERROR_SUCCESS) {
-            if (ret == ERROR_KERNEL_BUFFER_NOT_ENOUGH) {
-                break;
-            }
-            log_error("rtmp handshake or connect failed. ret=%d", ret);
-            return ret;
+    while (true) {
+        switch (m_type) {
+        case HandShake:
+            ret = handshake();
+            break;
+        case Connect:
+            ret = connect_app();
+            break;
+        case CreateStream:
+            ret = create_stream();
+            break;
+        case Publish:
+            ret = publish();
+            break;
+        case Play:
+            ret = play();
+            break;
+        case RecvChunk:
+            ret = read_chunk();
+            break;
+        default:
+            break;
         }
 
-        if ((ret = read_chunk()) != ERROR_SUCCESS) {
-            if (ret == ERROR_KERNEL_BUFFER_NOT_ENOUGH) {
-                break;
-            }
-            log_error("read rtmp chunk failed. ret=%d", ret);
-            return ret;
-        }
-
-        if ((ret = decode_message()) != ERROR_SUCCESS) {
-            log_error("decode and process rtmp message failed. ret=%d", ret);
-            return ret;
+        if (ret != ERROR_SUCCESS) {
+            break;
         }
     }
 
-    return ERROR_SUCCESS;
+    return ret;
 }
 
 void rtmp_client::set_chunk_size(dint32 chunk_size)
@@ -70,31 +70,22 @@ void rtmp_client::set_chunk_size(dint32 chunk_size)
     m_out_chunk_size = chunk_size;
 }
 
+void rtmp_client::set_in_ack_size(dint32 ack_size)
+{
+    in_ack_size.window = ack_size;
+}
+
 void rtmp_client::set_buffer_length(dint64 len)
 {
     m_player_buffer_length = len;
 }
 
-void rtmp_client::set_connect_packet(DSharedPtr<ConnectAppPacket> pkt)
+int rtmp_client::start_rtmp(bool publish, kernel_request *req)
 {
-    m_conn_pkt = pkt;
-}
-
-int rtmp_client::start_rtmp(bool publish, rtmp_request *req)
-{
-    int ret = ERROR_SUCCESS;
-
     m_publish = publish;
     m_req->copy(req);
 
-    if ((ret = handshake_and_connect()) != ERROR_SUCCESS) {
-        if (ret != ERROR_KERNEL_BUFFER_NOT_ENOUGH) {
-            log_error("rtmp handshake or connect failed. ret=%d", ret);
-            return ret;
-        }
-    }
-
-    return ERROR_SUCCESS;
+    return service();
 }
 
 int rtmp_client::stop_rtmp()
@@ -104,7 +95,7 @@ int rtmp_client::stop_rtmp()
     CloseStreamPacket *pkt = new CloseStreamPacket();
     DAutoFree(CloseStreamPacket, pkt);
 
-    if ((ret = m_chunk_writer->send_message(pkt)) != ERROR_SUCCESS) {
+    if ((ret = send_message(pkt)) != ERROR_SUCCESS) {
         log_error("send rtmp closeStream packet failed. ret=%d", ret);
         return ret;
     }
@@ -112,56 +103,50 @@ int rtmp_client::stop_rtmp()
     return ret;
 }
 
-int rtmp_client::send_av_data(CommonMessage *msg)
+int rtmp_client::send_av_data(RtmpMessage *msg)
 {
     int ret = ERROR_SUCCESS;
 
     msg->header.stream_id = m_stream_id;
 
-    if ((ret = m_chunk_writer->send_message(msg)) != ERROR_SUCCESS) {
-        log_error("send audio/video message to server failed. type=%d, ret=%d", msg->header.message_type, ret);
+    if ((ret = m_ch->send_message(msg)) != ERROR_SUCCESS) {
+        log_error_eagain(ret, ret, "send audio/video message to server failed. type=%d, ret=%d", msg->header.message_type, ret);
         return ret;
     }
 
     return ret;
 }
 
-void rtmp_client::set_av_handler(AVHandlerEvent handler)
+void rtmp_client::set_av_handler(RtmpAVHandler handler)
 {
     m_av_handler = handler;
 }
 
-void rtmp_client::set_metadata_handler(AVHandlerEvent handler)
+void rtmp_client::set_metadata_handler(RtmpAVHandler handler)
 {
     m_metadata_handler = handler;
 }
 
-bool rtmp_client::can_publish()
+void rtmp_client::set_publish_start_handler(RtmpVerifyHandler handler)
 {
-    return m_can_publish;
+    m_publish_start_handler = handler;
 }
 
-void rtmp_client::set_timeout(dint64 timeout)
+void rtmp_client::set_play_start_handler(RtmpVerifyHandler handler)
 {
-    m_timeout = timeout;
+    m_play_start_handler = handler;
 }
 
 int rtmp_client::read_chunk()
 {
     int ret = ERROR_SUCCESS;
 
-    if (!m_hs)
-        return ret;
-
-    if ((ret = m_chunk_reader->read()) != ERROR_SUCCESS) {
-        if (ret != ERROR_KERNEL_BUFFER_NOT_ENOUGH) {
-            log_error("read rtmp chunk failed. ret=%d", ret);
-        }
+    if ((ret = m_ch->read_chunk()) != ERROR_SUCCESS) {
         return ret;
     }
 
-    if (m_chunk_reader->entired()) {
-        m_ch = true;
+    if (m_ch->entired()) {
+        return decode_message();
     }
 
     return ret;
@@ -171,32 +156,11 @@ int rtmp_client::decode_message()
 {
     int ret = ERROR_SUCCESS;
 
-    if (!m_ch) {
+    RtmpMessage *msg = m_ch->get_message();
+    DAutoFree(RtmpMessage, msg);
+
+    if ((ret = send_acknowledgement()) != ERROR_SUCCESS) {
         return ret;
-    }
-    m_ch = false;
-
-    CommonMessage *msg = m_chunk_reader->getMessage();
-    DAutoFree(CommonMessage, msg);
-
-    if (true) {
-        duint64 total_recv_size = m_socket->get_recv_size();
-        duint64 delta = total_recv_size - m_window_total_size;
-        m_window_total_size = total_recv_size;
-        m_window_response_size += delta;
-
-        if (m_window_response_size >= 0xf0000000) {
-            m_window_response_size = 0;
-            m_window_last_ack = 0;
-        }
-
-        if (m_window_ack_size > 0 && ((m_window_response_size - m_window_last_ack) >= (duint64)m_window_ack_size)) {
-            m_window_last_ack = m_window_response_size;
-            if ((ret = send_acknowledgement((dint32)m_window_response_size)) != ERROR_SUCCESS) {
-                log_error("send rtmp acknowledgement packet failed. ret=%d", ret);
-                return ret;
-            }
-        }
     }
 
     if (msg->is_amf0_command() || msg->is_amf3_command()) {
@@ -261,29 +225,19 @@ int rtmp_client::decode_message()
     return ret;
 }
 
-int rtmp_client::handshake_and_connect()
+int rtmp_client::handshake()
 {
     int ret = ERROR_SUCCESS;
 
-    if (m_hs) {
+    if ((ret = m_hs->handshake_with_server()) != ERROR_SUCCESS) {
+        log_error_eagain(ret, ret, "handshake with server failed. ret=%d", ret);
         return ret;
     }
 
-    if ((ret = m_hs_handler->handshake_with_server(false)) != ERROR_SUCCESS) {
-        if (ret != ERROR_KERNEL_BUFFER_NOT_ENOUGH) {
-            log_error("rtmp handshake with server failed. ret=%d", ret);
-            DFree(m_hs_handler);
-        }
-        return ret;
-    }
-
-    m_hs = true;
-    DFree(m_hs_handler);
-
-    // 握手完毕之后，需要发送connect包，放在这里触发可以减少判断，不必记录connect的状态
-    if((ret = connect_app()) != ERROR_SUCCESS) {
-        log_error("send rtmp connect packet failed. ret=%d", ret);
-        return ret;
+    if (m_hs->completed()) {
+        log_info("handshake with server success");
+        m_type = Connect;
+        DFree(m_hs);
     }
 
     return ret;
@@ -293,32 +247,29 @@ int rtmp_client::connect_app()
 {
     int ret = ERROR_SUCCESS;
 
-    if (m_schedule != RtmpClientSchedule::Default) {
+    ConnectAppPacket *pkt = new ConnectAppPacket();
+    DAutoFree(ConnectAppPacket, pkt);
+
+    pkt->command_object.setValue("app", new AMF0String(m_req->app));
+    pkt->command_object.setValue("flashVer", new AMF0String("WIN 12,0,0,41"));
+    pkt->command_object.setValue("swfUrl", new AMF0String(m_req->swfUrl));
+    pkt->command_object.setValue("tcUrl", new AMF0String(m_req->tcUrl));
+    pkt->command_object.setValue("fpad", new AMF0Boolean(false));
+    pkt->command_object.setValue("capabilities", new AMF0Number(239));
+    pkt->command_object.setValue("audioCodecs", new AMF0Number(3575));
+    pkt->command_object.setValue("videoCodecs", new AMF0Number(252));
+    pkt->command_object.setValue("videoFunction", new AMF0Number(1));
+    pkt->command_object.setValue("objectEncoding", new AMF0Number(0));
+
+    m_type = RecvChunk;
+    m_requests[pkt->transaction_id] = pkt->command_name;
+
+    if ((ret = send_message(pkt)) != ERROR_SUCCESS) {
+        log_error("send connect packet failed. ret=%d", ret);
         return ret;
     }
 
-    if (!m_conn_pkt.get()) {
-        ConnectAppPacket *pkt = new ConnectAppPacket();
-        m_conn_pkt = DSharedPtr<ConnectAppPacket>(pkt);
-
-        m_conn_pkt->command_object.setValue("app", new AMF0String(m_req->app));
-        m_conn_pkt->command_object.setValue("flashVer", new AMF0String("WIN 12,0,0,41"));
-        m_conn_pkt->command_object.setValue("swfUrl", new AMF0String(m_req->swfUrl));
-        m_conn_pkt->command_object.setValue("tcUrl", new AMF0String(m_req->tcUrl));
-        m_conn_pkt->command_object.setValue("fpad", new AMF0Boolean(false));
-        m_conn_pkt->command_object.setValue("capabilities", new AMF0Number(239));
-        m_conn_pkt->command_object.setValue("audioCodecs", new AMF0Number(3575));
-        m_conn_pkt->command_object.setValue("videoCodecs", new AMF0Number(252));
-        m_conn_pkt->command_object.setValue("videoFunction", new AMF0Number(1));
-        m_conn_pkt->command_object.setValue("objectEncoding", new AMF0Number(0));
-    }
-
-    if ((ret = m_chunk_writer->send_message(m_conn_pkt.get())) != ERROR_SUCCESS) {
-        return ret;
-    }
-
-    m_requests[m_conn_pkt->transaction_id] = m_conn_pkt->command_name;
-    m_schedule = RtmpClientSchedule::Connect;
+    log_info("connect app success");
 
     return ret;
 }
@@ -327,19 +278,18 @@ int rtmp_client::create_stream()
 {
     int ret = ERROR_SUCCESS;
 
-    if (m_schedule != RtmpClientSchedule::ConnectResponsed) {
-        return ret;
-    }
-
     CreateStreamPacket *pkt = new CreateStreamPacket();
     DAutoFree(CreateStreamPacket, pkt);
 
-    if ((ret = m_chunk_writer->send_message(pkt)) != ERROR_SUCCESS) {
+    m_type = RecvChunk;
+    m_requests[pkt->transaction_id] = pkt->command_name;
+
+    if ((ret = send_message(pkt)) != ERROR_SUCCESS) {
+        log_error("send create stream packet failed. ret=%d", ret);
         return ret;
     }
 
-    m_requests[pkt->transaction_id] = pkt->command_name;
-    m_schedule = RtmpClientSchedule::CreateStream;
+    log_info("create stream success");
 
     return ret;
 }
@@ -348,24 +298,20 @@ int rtmp_client::publish()
 {
     int ret = ERROR_SUCCESS;
 
-    if (m_schedule != RtmpClientSchedule::CreateStreamResponsed) {
-        return ret;
-    }
-
     PublishPacket *pkt = new PublishPacket();
     DAutoFree(PublishPacket, pkt);
 
     pkt->header.stream_id = m_stream_id;
     pkt->stream_name = m_req->stream;
 
-    if ((ret = m_chunk_writer->send_message(pkt)) != ERROR_SUCCESS) {
-        log_error("send rtmp publish packet failed. ret=%d", ret);
+    m_type = RecvChunk;
+
+    if ((ret = send_message(pkt)) != ERROR_SUCCESS) {
+        log_error("send publish packet failed. ret=%d", ret);
         return ret;
     }
 
-    m_schedule = RtmpClientSchedule::Publish;
-
-    log_trace("start publish");
+    log_info("publish success");
 
     return ret;
 }
@@ -374,12 +320,7 @@ int rtmp_client::play()
 {
     int ret = ERROR_SUCCESS;
 
-    if (m_schedule != RtmpClientSchedule::CreateStreamResponsed) {
-        return ret;
-    }
-
     if ((ret = send_buffer_length(m_player_buffer_length)) != ERROR_SUCCESS) {
-        log_error("send rtmp set_buffer_length packet failed. ret=%d", ret);
         return ret;
     }
 
@@ -389,25 +330,23 @@ int rtmp_client::play()
     pkt->header.stream_id = m_stream_id;
     pkt->stream_name = m_req->stream;
 
-    if ((ret = m_chunk_writer->send_message(pkt)) != ERROR_SUCCESS) {
-        log_error("send rtmp play packet failed. ret=%d", ret);
+    m_type = RecvChunk;
+
+    if ((ret = send_message(pkt)) != ERROR_SUCCESS) {
+        log_error("send play packet failed. ret=%d", ret);
         return ret;
     }
 
-    m_schedule = RtmpClientSchedule::play;
-
-    log_trace("start play");
+    log_info("play success");
 
     return ret;
 }
 
-int rtmp_client::process_connect_response(CommonMessage *msg)
+int rtmp_client::process_connect_response(RtmpMessage *msg)
 {
     int ret = ERROR_SUCCESS;
 
-    if (m_schedule != RtmpClientSchedule::Connect) {
-        return ret;
-    }
+    log_info("start connect response");
 
     ConnectAppResPacket *pkt = new ConnectAppResPacket();
     DAutoFree(ConnectAppResPacket, pkt);
@@ -427,30 +366,22 @@ int rtmp_client::process_connect_response(CommonMessage *msg)
         }
     }
 
-    m_schedule = RtmpClientSchedule::ConnectResponsed;
-
     if ((ret = send_chunk_size(m_out_chunk_size)) != ERROR_SUCCESS) {
-        log_error("send rtmp set_chunk_size packet failed. ret=%d", ret);
         return ret;
     }
 
-    m_chunk_writer->set_out_chunk_size(m_out_chunk_size);
+    m_ch->set_out_chunk_size(m_out_chunk_size);
 
-    if ((ret = create_stream()) != ERROR_SUCCESS) {
-        log_error("send rtmp createStream packet failed. ret=%d", ret);
-        return ret;
-    }
+    m_type = CreateStream;
+
+    log_info("connect response finished");
 
     return ret;
 }
 
-int rtmp_client::process_create_stream_response(CommonMessage *msg)
+int rtmp_client::process_create_stream_response(RtmpMessage *msg)
 {
     int ret = ERROR_SUCCESS;
-
-    if (m_schedule != RtmpClientSchedule::CreateStream) {
-        return ret;
-    }
 
     CreateStreamResPacket *pkt = new CreateStreamResPacket(0,0);
     DAutoFree(CreateStreamResPacket, pkt);
@@ -462,28 +393,19 @@ int rtmp_client::process_create_stream_response(CommonMessage *msg)
     }
 
     m_stream_id = pkt->stream_id;
-    m_schedule = RtmpClientSchedule::CreateStreamResponsed;
 
     if (m_publish) {
-        if((ret = publish()) != ERROR_SUCCESS) {
-            return ret;
-        }
+         m_type = Publish;
     } else {
-        if((ret = play()) != ERROR_SUCCESS) {
-            return ret;
-        }
+        m_type = Play;
     }
 
     return ret;
 }
 
-int rtmp_client::process_command_onstatus(CommonMessage *msg)
+int rtmp_client::process_command_onstatus(RtmpMessage *msg)
 {
     int ret = ERROR_SUCCESS;
-
-    if (m_schedule != RtmpClientSchedule::Publish && m_schedule != RtmpClientSchedule::play) {
-        return ret;
-    }
 
     OnStatusCallPacket *pkt = new OnStatusCallPacket();
     DAutoFree(OnStatusCallPacket, pkt);
@@ -495,23 +417,24 @@ int rtmp_client::process_command_onstatus(CommonMessage *msg)
     }
 
     if (pkt->status_code == StatusCodePublishStart) {
-        m_schedule = RtmpClientSchedule::PublishResponsed;
-        m_can_publish = true;
-
-        m_socket->setRecvTimeOut(-1);
-        m_socket->setSendTimeOut(m_timeout);
+        if (m_publish_start_handler && !m_publish_start_handler(m_req)) {
+            ret = ERROR_RTMP_CLIENT_PUBLISH_START;
+            return ret;
+        }
     }
     if (pkt->status_code == StatusCodeStreamStart) {
-        m_schedule = RtmpClientSchedule::playResponsed;
-
-        m_socket->setSendTimeOut(-1);
-        m_socket->setRecvTimeOut(m_timeout);
+        if (m_play_start_handler && !m_play_start_handler(m_req)) {
+            ret = ERROR_RTMP_CLIENT_PLAY_START;
+            return ret;
+        }
     }
+
+    m_type = RecvChunk;
 
     return ret;
 }
 
-int rtmp_client::process_set_chunk_size(CommonMessage *msg)
+int rtmp_client::process_set_chunk_size(RtmpMessage *msg)
 {
     int ret = ERROR_SUCCESS;
 
@@ -525,13 +448,14 @@ int rtmp_client::process_set_chunk_size(CommonMessage *msg)
     }
 
     m_in_chunk_size = pkt->chunk_size;
-    m_chunk_reader->set_in_chunk_size(m_in_chunk_size);
+    m_ch->set_in_chunk_size(m_in_chunk_size);
 
     log_trace("peer_chunk_size=%d", m_in_chunk_size);
+
     return ret;
 }
 
-int rtmp_client::process_window_ackledgement_size(CommonMessage *msg)
+int rtmp_client::process_window_ackledgement_size(RtmpMessage *msg)
 {
     int ret = ERROR_SUCCESS;
 
@@ -544,12 +468,14 @@ int rtmp_client::process_window_ackledgement_size(CommonMessage *msg)
         return ret;
     }
 
-    m_window_ack_size = pkt->ackowledgement_window_size;
+    if (pkt->ackowledgement_window_size > 0) {
+        in_ack_size.window = pkt->ackowledgement_window_size;
+    }
 
     return ret;
 }
 
-int rtmp_client::process_metadata(CommonMessage *msg)
+int rtmp_client::process_metadata(RtmpMessage *msg)
 {
     int ret = ERROR_SUCCESS;
 
@@ -563,14 +489,13 @@ int rtmp_client::process_metadata(CommonMessage *msg)
 
     if ((ret = pkt->decode()) != ERROR_SUCCESS) {
         log_error("decode rtmp metadata packet failed. ret=%d", ret);
-        DFree(pkt);
         return ret;
     }
 
     return m_metadata_handler(pkt);
 }
 
-int rtmp_client::process_video_audio(CommonMessage *msg)
+int rtmp_client::process_video_audio(RtmpMessage *msg)
 {
     if (!m_av_handler) {
         return ERROR_SUCCESS;
@@ -578,7 +503,7 @@ int rtmp_client::process_video_audio(CommonMessage *msg)
     return m_av_handler(msg);
 }
 
-int rtmp_client::process_aggregate(CommonMessage *msg)
+int rtmp_client::process_aggregate(RtmpMessage *msg)
 {
     int ret = ERROR_SUCCESS;
 
@@ -644,7 +569,7 @@ int rtmp_client::process_aggregate(CommonMessage *msg)
             return ret;
         }
 
-        CommonMessage _msg;
+        RtmpMessage _msg;
         _msg.header.message_type = type;
         _msg.header.payload_length = data_size;
         _msg.header.timestamp_delta = timestamp;
@@ -720,23 +645,42 @@ int rtmp_client::send_chunk_size(dint32 chunk_size)
     DAutoFree(SetChunkSizePacket, pkt);
     pkt->chunk_size = chunk_size;
 
-    if ((ret = m_chunk_writer->send_message(pkt)) != ERROR_SUCCESS) {
-        log_error("write chunk size message failed. ret=%d", ret);
+    if ((ret = send_message(pkt)) != ERROR_SUCCESS) {
+        log_error("send chunk size packet failed. ret=%d", ret);
         return ret;
     }
 
     return ret;
 }
 
-int rtmp_client::send_acknowledgement(dint32 recv_size)
+int rtmp_client::send_acknowledgement()
 {
     int ret = ERROR_SUCCESS;
 
+    if (in_ack_size.window <= 0) {
+        return ret;
+    }
+
+    // ignore when delta bytes not exceed half of window(ack size).
+    duint64 delta = m_socket->getTotalReadSize() - in_ack_size.nb_recv_bytes;
+    if (delta < (duint64)in_ack_size.window / 2) {
+        return ret;
+    }
+    in_ack_size.nb_recv_bytes = m_socket->getTotalReadSize();
+
+    // when the sequence number overflow, reset it.
+    duint64 sequence_number = in_ack_size.sequence_number + delta;
+    if (sequence_number > 0xf0000000) {
+        sequence_number = delta;
+    }
+    in_ack_size.sequence_number = sequence_number;
+
     AcknowledgementPacket *pkt = new AcknowledgementPacket();
     DAutoFree(AcknowledgementPacket, pkt);
-    pkt->sequence_number = recv_size;
+    pkt->sequence_number = sequence_number;
 
-    if ((ret = m_chunk_writer->send_message(pkt)) != ERROR_SUCCESS) {
+    if ((ret = send_message(pkt)) != ERROR_SUCCESS) {
+        log_error("send acknowledgement failed. ret=%d", ret);
         return ret;
     }
 
@@ -753,10 +697,23 @@ int rtmp_client::send_buffer_length(dint64 len)
     pkt->event_type = SrcPCUCSetBufferLength;
     pkt->extra_data = len;
 
-    if ((ret = m_chunk_writer->send_message(pkt)) != ERROR_SUCCESS) {
-        log_error("write set buffer length message failed. ret=%d", ret);
+    if ((ret = send_message(pkt)) != ERROR_SUCCESS) {
+        log_error("send set_buffer_length packet failed. ret=%d", ret);
         return ret;
     }
 
     return ret;
+}
+
+int rtmp_client::send_message(RtmpMessage *msg)
+{
+    int ret = ERROR_SUCCESS;
+
+    if ((ret = m_ch->send_message(msg)) != ERROR_SUCCESS) {
+        if (ret != SOCKET_EAGAIN) {
+            return ret;
+        }
+    }
+
+    return ERROR_SUCCESS;
 }

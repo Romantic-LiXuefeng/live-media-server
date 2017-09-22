@@ -8,7 +8,7 @@
 #include <vector>
 #include <map>
 
-class rtmp_request;
+class kernel_request;
 
 class lms_config_base
 {
@@ -18,6 +18,87 @@ public:
 
     virtual void load_config(lms_config_directive *directive) = 0;
     virtual lms_config_base *copy() = 0;
+};
+
+class lms_hls_config_struct : public lms_config_base
+{
+public:
+    lms_hls_config_struct();
+    ~lms_hls_config_struct();
+
+    virtual void load_config(lms_config_directive *directive);
+    virtual lms_hls_config_struct *copy();
+
+public:
+    bool get_enable(bool &value);
+    bool get_window(double &value);
+    bool get_fragment(double &value);
+    bool get_acodec(DString &value);
+    bool get_vcodec(DString &value);
+    bool get_m3u8_path(DString &value);
+    bool get_ts_path(DString &value);
+    bool get_time_jitter(bool &value);
+    bool get_time_jitter_type(int &value);
+    bool get_root(DString &value);
+    bool get_time_expired(int &value);
+
+public:
+    bool exist_enable;
+    // 默认false
+    bool enable;
+
+    bool exist_window;
+    double window;
+
+    bool exist_fragment;
+    double fragment;
+
+    bool exist_acodec;
+    DString acodec;
+
+    bool exist_vcodec;
+    DString vcodec;
+
+    bool exist_m3u8_path;
+    DString m3u8_path;
+
+    bool exist_ts_path;
+    DString ts_path;
+
+    bool exist_time_jitter;
+    bool time_jitter;
+
+    bool exist_jitter_type;
+    // 默认middle
+    int time_jitter_type;
+
+    bool exist_root;
+    DString root;
+
+    bool exist_time_expired;
+    int time_expired;
+
+};
+
+class lms_ts_codec_struct : public lms_config_base
+{
+public:
+    lms_ts_codec_struct();
+    ~lms_ts_codec_struct();
+
+    virtual void load_config(lms_config_directive *directive);
+    virtual lms_ts_codec_struct *copy();
+
+public:
+    bool get_acodec(DString &value);
+    bool get_vcodec(DString &value);
+
+public:
+    bool exist_acodec;
+    DString acodec;
+
+    bool exist_vcodec;
+    DString vcodec;
 };
 
 class lms_proxy_config_struct : public lms_config_base
@@ -37,6 +118,9 @@ public:
     bool get_proxy_app(DString &value);
     bool get_proxy_stream(DString &value);
     bool get_proxy_timeout(int &value);
+
+    bool get_proxy_ts_acodec(DString &value);
+    bool get_proxy_ts_vcodec(DString &value);
 
 public:
     bool exist_enable;
@@ -65,6 +149,8 @@ public:
     bool exist_timeout;
     // 默认10秒
     int timeout;
+
+    lms_ts_codec_struct *ts_codec;
 };
 
 /**
@@ -74,7 +160,6 @@ public:
  * time_jitter_type     simple | middle | high;
  * gop_cache            on;
  * fast_gop             on;
- * time_out             60;
  * queue_size           30; //单位M
  */
 class lms_live_config_struct : public lms_config_base
@@ -91,7 +176,6 @@ public:
     bool get_jitter_type(int &type);
     bool get_gop_cache(bool &gop);
     bool get_fast_gop(bool &gop);
-    bool get_timeout(int &time);
     bool get_queue_size(int &size);
 
 public:
@@ -110,10 +194,6 @@ public:
     bool exist_fast_gop;
     // 默认false
     bool fast_gop;
-
-    bool exist_timeout;
-    // 默认30，单位秒
-    int timeout;
 
     bool exist_queue_size;
     // 默认30Mb
@@ -141,6 +221,8 @@ public:
 
     bool get_enable(bool &val);
     bool get_chunk_size(int &val);
+    bool get_in_ack_size(int &val);
+    bool get_timeout(int &time);
 
 public:
     bool exist_enable;
@@ -151,6 +233,13 @@ public:
     // 默认4096;
     int chunk_size;
 
+    bool exist_in_ack_size;
+    // 默认0
+    int in_ack_size;
+
+    bool exist_timeout;
+    // 默认30，单位秒
+    int timeout;
 };
 
 /**
@@ -177,6 +266,13 @@ public:
     bool get_buffer_length(int &val);
     bool get_chunked(bool &val);
     bool get_root(DString &val);
+    bool get_timeout(int &time);
+    bool get_flv_live_enable(bool &val);
+    bool get_flv_recv_enable(bool &val);
+    bool get_ts_live_enable(bool &val);
+    bool get_ts_live_acodec(DString &val);
+    bool get_ts_live_vcodec(DString &val);
+    bool get_ts_recv_enable(bool &val);
 
 public:
     bool exist_enable;
@@ -194,6 +290,27 @@ public:
     bool exist_root;
 
     DString root;
+
+    bool exist_timeout;
+    // 默认30，单位秒
+    int timeout;
+
+    bool exist_flv_live_enable;
+    // 默认false
+    bool flv_live_enable;
+
+    bool exist_flv_recv_enable;
+    // 默认false
+    bool flv_recv_enable;
+
+    bool exist_ts_recv_enable;
+    // 默认false
+    bool ts_recv_enable;
+
+    bool exist_ts_live_enable;
+    bool ts_live_enable;
+
+    lms_ts_codec_struct *ts_codec;
 };
 
 class lms_refer_config_struct : public lms_config_base
@@ -285,17 +402,18 @@ public:
     virtual void load_config(lms_config_directive *directive);
     virtual lms_location_config_struct *copy();
 
-    bool get_matched(rtmp_request *req);
+    bool get_matched(kernel_request *req);
 
 public:
     bool get_rtmp_enable(bool &value);
     bool get_rtmp_chunk_size(int &value);
+    bool get_rtmp_in_ack_size(int &value);
+    bool get_rtmp_timeout(int &value);
 
     bool get_time_jitter(bool &value);
     bool get_time_jitter_type(int &value);
     bool get_gop_cache(bool &value);
     bool get_fast_gop(bool &value);
-    bool get_timeout(int &value);
     bool get_queue_size(int &value);
 
     bool get_proxy_enable(bool &value);
@@ -305,11 +423,21 @@ public:
     bool get_proxy_app(DString &value);
     bool get_proxy_stream(DString &value);
     bool get_proxy_timeout(int &value);
+    bool get_proxy_ts_acodec(DString &value);
+    bool get_proxy_ts_vcodec(DString &value);
 
     bool get_http_enable(bool &value);
     bool get_http_buffer_length(int &value);
     bool get_http_chunked(bool &value);
     bool get_http_root(DString &value);
+    bool get_http_timeout(int &value);
+
+    bool get_flv_live_enable(bool &value);
+    bool get_flv_recv_enable(bool &value);
+    bool get_ts_live_enable(bool &value);
+    bool get_ts_live_acodec(DString &value);
+    bool get_ts_live_vcodec(DString &value);
+    bool get_ts_recv_enable(bool &value);
 
     bool get_refer_enable(bool &value);
     bool get_refer_all(std::vector<DString> &value);
@@ -326,6 +454,18 @@ public:
     bool get_hook_rtmp_stop(DString &value);
     bool get_hook_timeout(int &value);
 
+    bool get_hls_enable(bool &value);
+    bool get_hls_window(double &value);
+    bool get_hls_fragment(double &value);
+    bool get_hls_acodec(DString &value);
+    bool get_hls_vcodec(DString &value);
+    bool get_hls_m3u8_path(DString &value);
+    bool get_hls_ts_path(DString &value);
+    bool get_hls_time_jitter(bool &value);
+    bool get_hls_time_jitter_type(int &value);
+    bool get_hls_root(DString &value);
+    bool get_hls_time_expired(int &value);
+
 public:
     DString type;
     DString pattern;
@@ -336,6 +476,7 @@ public:
     lms_http_config_struct *http;
     lms_refer_config_struct *refer;
     lms_hook_config_struct *hook;
+    lms_hls_config_struct *hls;
 };
 
 /**
@@ -378,46 +519,69 @@ public:
     virtual void load_config(lms_config_directive *directive);
     virtual lms_server_config_struct *copy();
 
-    bool get_matched(rtmp_request *req);
+    bool get_matched(kernel_request *req);
 
 public:
-    bool get_rtmp_enable(rtmp_request *req);
-    int  get_rtmp_chunk_size(rtmp_request *req);
+    bool get_rtmp_enable(kernel_request *req);
+    int  get_rtmp_chunk_size(kernel_request *req);
+    int  get_rtmp_in_ack_size(kernel_request *req);
+    int  get_rtmp_timeout(kernel_request *req);
 
-    bool get_time_jitter(rtmp_request *req);
-    int  get_time_jitter_type(rtmp_request *req);
-    bool get_gop_cache(rtmp_request *req);
-    bool get_fast_gop(rtmp_request *req);
-    int  get_timeout(rtmp_request *req);
-    int  get_queue_size(rtmp_request *req);
+    bool get_time_jitter(kernel_request *req);
+    int  get_time_jitter_type(kernel_request *req);
+    bool get_gop_cache(kernel_request *req);
+    bool get_fast_gop(kernel_request *req);
+    int  get_queue_size(kernel_request *req);
 
-    bool get_proxy_enable(rtmp_request *req);
-    DString get_proxy_type(rtmp_request *req);
-    std::vector<DString> get_proxy_pass(rtmp_request *req);
-    DString get_proxy_vhost(rtmp_request *req);
-    DString get_proxy_app(rtmp_request *req);
-    DString get_proxy_stream(rtmp_request *req);
-    int     get_proxy_timeout(rtmp_request *req);
+    bool get_proxy_enable(kernel_request *req);
+    DString get_proxy_type(kernel_request *req);
+    std::vector<DString> get_proxy_pass(kernel_request *req);
+    DString get_proxy_vhost(kernel_request *req);
+    DString get_proxy_app(kernel_request *req);
+    DString get_proxy_stream(kernel_request *req);
+    int     get_proxy_timeout(kernel_request *req);
+    DString get_proxy_ts_acodec(kernel_request *req);
+    DString get_proxy_ts_vcodec(kernel_request *req);
 
-    bool get_http_enable(rtmp_request *req);
-    int  get_http_buffer_length(rtmp_request *req);
-    bool get_http_chunked(rtmp_request *req);
-    DString get_http_root(rtmp_request *req);
+    bool get_http_enable(kernel_request *req);
+    int  get_http_buffer_length(kernel_request *req);
+    bool get_http_chunked(kernel_request *req);
+    DString get_http_root(kernel_request *req);
+    int  get_http_timeout(kernel_request *req);
 
-    bool get_refer_enable(rtmp_request *req);
-    std::vector<DString> get_refer_all(rtmp_request *req);
-    std::vector<DString> get_refer_publish(rtmp_request *req);
-    std::vector<DString> get_refer_play(rtmp_request *req);
+    bool get_flv_live_enable(kernel_request *req);
+    bool get_flv_recv_enable(kernel_request *req);
+    bool get_ts_live_enable(kernel_request *req);
+    DString get_ts_live_acodec(kernel_request *req);
+    DString get_ts_live_vcodec(kernel_request *req);
+    bool get_ts_recv_enable(kernel_request *req);
 
-    DString get_hook_rtmp_connect(rtmp_request *req);
-    DString get_hook_rtmp_connect_pattern(rtmp_request *req);
-    DString get_hook_rtmp_publish(rtmp_request *req);
-    DString get_hook_rtmp_publish_pattern(rtmp_request *req);
-    DString get_hook_rtmp_play(rtmp_request *req);
-    DString get_hook_rtmp_play_pattern(rtmp_request *req);
-    DString get_hook_rtmp_unpublish(rtmp_request *req);
-    DString get_hook_rtmp_stop(rtmp_request *req);
-    int     get_hook_timeout(rtmp_request *req);
+    bool get_refer_enable(kernel_request *req);
+    std::vector<DString> get_refer_all(kernel_request *req);
+    std::vector<DString> get_refer_publish(kernel_request *req);
+    std::vector<DString> get_refer_play(kernel_request *req);
+
+    DString get_hook_rtmp_connect(kernel_request *req);
+    DString get_hook_rtmp_connect_pattern(kernel_request *req);
+    DString get_hook_rtmp_publish(kernel_request *req);
+    DString get_hook_rtmp_publish_pattern(kernel_request *req);
+    DString get_hook_rtmp_play(kernel_request *req);
+    DString get_hook_rtmp_play_pattern(kernel_request *req);
+    DString get_hook_rtmp_unpublish(kernel_request *req);
+    DString get_hook_rtmp_stop(kernel_request *req);
+    int     get_hook_timeout(kernel_request *req);
+
+    bool get_hls_enable(kernel_request *req);
+    double get_hls_window(kernel_request *req);
+    double get_hls_fragment(kernel_request *req);
+    DString get_hls_acodec(kernel_request *req);
+    DString get_hls_vcodec(kernel_request *req);
+    DString get_hls_m3u8_path(kernel_request *req);
+    DString get_hls_ts_path(kernel_request *req);
+    bool get_hls_time_jitter(kernel_request *req);
+    int get_hls_time_jitter_type(kernel_request *req);
+    DString get_hls_root(kernel_request *req);
+    int get_hls_time_expired(kernel_request *req);
 
 public:
     std::vector<DString> server_name;
@@ -428,6 +592,7 @@ public:
     lms_http_config_struct *http;
     lms_refer_config_struct *refer;
     lms_hook_config_struct *hook;
+    lms_hls_config_struct *hls;
 
     std::vector<lms_location_config_struct*> locations;
 };
@@ -461,9 +626,6 @@ public:
     lms_config_struct();
     ~lms_config_struct();
 
-    void load_config(lms_config_directive *directive);
-
-private:
     void load_global_config(lms_config_directive *directive);
     void load_server_config(lms_config_directive *directive);
 
@@ -485,6 +647,8 @@ public:
     std::vector<int> rtmp_ports;
     std::vector<int> http_ports;
 
+    bool mempool_enable;      // 默认true
+
 public:
     std::vector<lms_server_config_struct*> servers;
 
@@ -499,9 +663,7 @@ public:
     static lms_config *instance();
 
 public:
-    int parse_file(const DString &filename);
-
-    void load_config(lms_config_directive *directive);
+    int parse_file();
 
 public:
     bool get_daemon();
@@ -516,10 +678,12 @@ public:
     bool get_log_enable_function();
     bool get_log_enable_file();
 
+    bool get_mempool_enable();
+
     std::vector<int> get_rtmp_ports();
     std::vector<int> get_http_ports();
 
-    lms_server_config_struct *get_server(rtmp_request *req);
+    lms_server_config_struct *get_server(kernel_request *req);
 
 private:
     static lms_config *m_instance;

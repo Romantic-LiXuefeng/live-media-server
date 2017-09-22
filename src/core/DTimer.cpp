@@ -6,6 +6,9 @@
 #include <unistd.h>
 #include <stdlib.h>
 
+static duint64 s_to_ns_base = 1 * 1000 * 1000 * 1000;
+static duint64 ms_to_ns_base = 1 * 1000 * 1000;
+
 DTimer::DTimer(DEvent *event)
     : m_event(event)
     , m_fd(-1)
@@ -25,7 +28,7 @@ void DTimer::setTimerEvent(TimerEvent handler)
     m_handler = handler;
 }
 
-void DTimer::start(int msec)
+bool DTimer::start(int msec)
 {
     struct itimerspec new_value;
     struct timespec now;
@@ -35,16 +38,21 @@ void DTimer::start(int msec)
 
     if (msec >= 1000) {
         sec = msec / 1000;
-        nsec = (msec % 1000) * 1000 * 1000;
+        nsec = (msec % 1000) * ms_to_ns_base;
     } else {
         sec = 0;
-        nsec = msec * 1000 * 1000;
+        nsec = msec * ms_to_ns_base;
     }
 
     clock_gettime(CLOCK_MONOTONIC, &now);
 
     new_value.it_value.tv_sec = now.tv_sec + sec;
     new_value.it_value.tv_nsec = now.tv_nsec + nsec;
+
+    if (new_value.it_value.tv_nsec >= s_to_ns_base) {
+        new_value.it_value.tv_sec += new_value.it_value.tv_nsec / s_to_ns_base;
+        new_value.it_value.tv_nsec = (new_value.it_value.tv_nsec % s_to_ns_base) * s_to_ns_base;
+    }
 
     if (m_singleShot) {
         new_value.it_interval.tv_sec = 0;
@@ -54,10 +62,19 @@ void DTimer::start(int msec)
         new_value.it_interval.tv_nsec = nsec;
     }
 
+    if (new_value.it_interval.tv_nsec >= s_to_ns_base) {
+        new_value.it_interval.tv_sec += new_value.it_interval.tv_nsec / s_to_ns_base;
+        new_value.it_interval.tv_nsec = (new_value.it_interval.tv_nsec % s_to_ns_base) * s_to_ns_base;
+    }
+
     m_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
 
     timerfd_settime(m_fd, TFD_TIMER_ABSTIME, &new_value, NULL);
-    m_event->add(this);
+
+    if (!m_event->add(this, m_fd)) {
+        return false;
+    }
+    return true;
 }
 
 void DTimer::stop()
@@ -70,7 +87,7 @@ void DTimer::stop()
 
     timerfd_settime(m_fd, TFD_TIMER_ABSTIME, &new_value, NULL);
 
-    m_event->del(this);
+    m_event->del(this, m_fd);
 
     if (m_fd != -1) {
         ::close(m_fd);

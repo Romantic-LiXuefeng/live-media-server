@@ -44,7 +44,7 @@ public:
     std::vector<AMF0Any*> values;
 };
 
-class ConnectAppPacket : public CommonMessage, public RtmpPacket
+class ConnectAppPacket : public RtmpMessage, public RtmpPacket
 {
 public:
     ConnectAppPacket();
@@ -67,7 +67,7 @@ public:
     DString swfUrl;
 };
 
-class ConnectAppResPacket : public CommonMessage, public RtmpPacket
+class ConnectAppResPacket : public RtmpMessage, public RtmpPacket
 {
 public:
     ConnectAppResPacket();
@@ -84,7 +84,7 @@ public:
     AMF0Object info;
 };
 
-class CreateStreamPacket : public CommonMessage, public RtmpPacket
+class CreateStreamPacket : public RtmpMessage, public RtmpPacket
 {
 public:
     CreateStreamPacket();
@@ -99,7 +99,7 @@ public:
     double transaction_id;
 };
 
-class CreateStreamResPacket : public CommonMessage, public RtmpPacket
+class CreateStreamResPacket : public RtmpMessage, public RtmpPacket
 {
 public:
     CreateStreamResPacket(double _transaction_id, double _stream_id = 1);
@@ -120,7 +120,7 @@ public:
  * Protocol control message 1, Set Chunk Size, is used to notify the
  * peer about the new maximum chunk size.
  */
-class SetChunkSizePacket : public CommonMessage
+class SetChunkSizePacket : public RtmpMessage
 {
 public:
     SetChunkSizePacket();
@@ -139,7 +139,7 @@ public:
  * The client or the server sends the acknowledgment to the peer after
  * receiving bytes equal to the window size.
  */
-class AcknowledgementPacket : public CommonMessage
+class AcknowledgementPacket : public RtmpMessage
 {
 public:
     AcknowledgementPacket();
@@ -157,7 +157,7 @@ public:
  * The client or the server sends this message to inform the peer which
  * window size to use when sending acknowledgment.
  */
-class SetWindowAckSizePacket : public CommonMessage
+class SetWindowAckSizePacket : public RtmpMessage
 {
 public:
     SetWindowAckSizePacket();
@@ -174,7 +174,7 @@ public:
 /**
  * 用于出错时响应对方信息
  */
-class OnErrorPacket : public CommonMessage
+class OnErrorPacket : public RtmpMessage
 {
 public:
     OnErrorPacket();
@@ -197,7 +197,7 @@ public:
 *
 * lms不会主动发送call命令
 */
-class CallPacket : public CommonMessage, public RtmpPacket
+class CallPacket : public RtmpMessage, public RtmpPacket
 {
 public:
     CallPacket();
@@ -214,7 +214,7 @@ public:
 /**
  * 响应call命令
  */
-class CallResPacket : public CommonMessage
+class CallResPacket : public RtmpMessage
 {
 public:
     CallResPacket(double _transaction_id);
@@ -231,7 +231,7 @@ public:
     AMF0Any *response;
 };
 
-class CloseStreamPacket : public CommonMessage, public RtmpPacket
+class CloseStreamPacket : public RtmpMessage, public RtmpPacket
 {
 public:
     CloseStreamPacket();
@@ -246,7 +246,7 @@ public:
     double transaction_id;
 };
 
-class FmleStartPacket : public CommonMessage, public RtmpPacket
+class FmleStartPacket : public RtmpMessage, public RtmpPacket
 {
 public:
     FmleStartPacket();
@@ -261,7 +261,7 @@ public:
     DString stream_name;
 };
 
-class FmleStartResPacket : public CommonMessage
+class FmleStartResPacket : public RtmpMessage
 {
 public:
     FmleStartResPacket(double _transaction_id);
@@ -276,7 +276,7 @@ public:
     DString stream_name;
 };
 
-class PublishPacket : public CommonMessage, public RtmpPacket
+class PublishPacket : public RtmpMessage, public RtmpPacket
 {
 public:
     PublishPacket();
@@ -293,7 +293,7 @@ public:
     DString type;
 };
 
-class PlayPacket : public CommonMessage, public RtmpPacket
+class PlayPacket : public RtmpMessage, public RtmpPacket
 {
 public:
     PlayPacket();
@@ -310,7 +310,7 @@ public:
 };
 
 // amf0 command onStatus
-class OnStatusCallPacket : public CommonMessage, public RtmpPacket
+class OnStatusCallPacket : public RtmpMessage, public RtmpPacket
 {
 public:
     OnStatusCallPacket();
@@ -328,7 +328,7 @@ public:
 };
 
 // amf0 data onStatus
-class OnStatusDataPacket : public CommonMessage
+class OnStatusDataPacket : public RtmpMessage
 {
 public:
     OnStatusDataPacket();
@@ -342,7 +342,7 @@ public:
     AMF0Object data;
 };
 
-class SampleAccessPacket : public CommonMessage
+class SampleAccessPacket : public RtmpMessage
 {
 public:
     SampleAccessPacket();
@@ -455,7 +455,7 @@ enum SrcPCUCEventType
 * +------------------------------+-------------------------
 * Figure 5 Pay load for the ‘User Control Message’.
 */
-class UserControlPacket : public CommonMessage
+class UserControlPacket : public RtmpMessage
 {
 public:
     UserControlPacket();
@@ -471,7 +471,7 @@ public:
     dint32 extra_data;
 };
 
-class OnMetaDataPacket : public CommonMessage, public RtmpPacket
+class OnMetaDataPacket : public RtmpMessage, public RtmpPacket
 {
 public:
     OnMetaDataPacket();

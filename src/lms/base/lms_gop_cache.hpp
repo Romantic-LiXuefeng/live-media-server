@@ -3,7 +3,7 @@
 
 #include <deque>
 #include "DSharedPtr.hpp"
-#include "rtmp_global.hpp"
+#include "kernel_global.hpp"
 #include "lms_timestamp.hpp"
 
 class lms_gop_cache
@@ -25,6 +25,9 @@ public:
     void CopyTo(lms_gop_cache *gop);
 
     void clear();
+
+    CommonMessage *video_sequence();
+    CommonMessage *audio_sequence();
 
 private:
     void clear_first_gop();

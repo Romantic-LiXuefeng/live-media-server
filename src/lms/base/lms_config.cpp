@@ -2,12 +2,347 @@
 #include "kernel_errno.hpp"
 #include "kernel_log.hpp"
 #include "lms_config_directive.hpp"
-#include "rtmp_global.hpp"
+#include "kernel_request.hpp"
 #include "lms_timestamp.hpp"
 
 #include <algorithm>
 
 #define RTMP_DEFAULT_LISTEN         1935
+
+/*****************************************************************************/
+
+lms_hls_config_struct::lms_hls_config_struct()
+    : exist_enable(false)
+    , enable(false)
+    , exist_window(false)
+    , exist_fragment(false)
+    , exist_acodec(false)
+    , exist_vcodec(false)
+    , exist_m3u8_path(false)
+    , exist_ts_path(false)
+    , exist_time_jitter(false)
+    , time_jitter(false)
+    , exist_jitter_type(false)
+    , exist_root(false)
+    , exist_time_expired(false)
+{
+
+}
+
+lms_hls_config_struct::~lms_hls_config_struct()
+{
+
+}
+
+void lms_hls_config_struct::load_config(lms_config_directive *directive)
+{
+    if (true) {
+        lms_config_directive *conf = directive->get("enable");
+        if (conf && !conf->arg(0).isEmpty()) {
+            if (conf->arg(0) == "on") {
+                enable = true;
+            }
+
+            exist_enable = true;
+
+            log_trace("enable=%s", conf->arg(0).c_str());
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("window");
+
+        if (conf && !conf->arg(0).isEmpty()) {
+            window = conf->arg(0).toDouble();
+
+            exist_window = true;
+
+            log_trace("window=%s", conf->arg(0).c_str());
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("fragment");
+
+        if (conf && !conf->arg(0).isEmpty()) {
+            fragment = conf->arg(0).toDouble();
+
+            exist_fragment = true;
+
+            log_trace("fragment=%s", conf->arg(0).c_str());
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("acodec");
+        if (conf && !conf->arg(0).isEmpty()) {
+            acodec = conf->arg(0);
+
+            exist_acodec = true;
+
+            log_trace("exist_acodec=%s", conf->arg(0).c_str());
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("vcodec");
+        if (conf && !conf->arg(0).isEmpty()) {
+            vcodec = conf->arg(0);
+
+            exist_vcodec = true;
+
+            log_trace("exist_vcodec=%s", conf->arg(0).c_str());
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("m3u8_path");
+        if (conf && !conf->arg(0).isEmpty()) {
+            m3u8_path = conf->arg(0);
+
+            exist_m3u8_path = true;
+
+            log_trace("m3u8_path=%s", conf->arg(0).c_str());
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("ts_path");
+        if (conf && !conf->arg(0).isEmpty()) {
+            ts_path = conf->arg(0);
+
+            exist_ts_path = true;
+
+            log_trace("ts_path=%s", conf->arg(0).c_str());
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("time_jitter");
+        if (conf && !conf->arg(0).isEmpty()) {
+            if (conf->arg(0) == "on") {
+                time_jitter = true;
+            }
+
+            exist_time_jitter = true;
+
+            log_trace("time_jitter=%s", conf->arg(0).c_str());
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("time_jitter_type");
+
+        if (conf && !conf->arg(0).isEmpty()) {
+            DString type = conf->arg(0);
+
+            if (type == "simple") {
+                time_jitter_type = LmsTimeStamp::simple;
+            } else if (type == "middle") {
+                time_jitter_type = LmsTimeStamp::middle;
+            } else if (type == "high") {
+                time_jitter_type = LmsTimeStamp::high;
+            }
+
+            exist_jitter_type = true;
+
+            log_trace("time_jitter_type=%s", conf->arg(0).c_str());
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("root");
+        if (conf && !conf->arg(0).isEmpty()) {
+            root = conf->arg(0);
+
+            exist_root = true;
+
+            log_trace("root=%s", conf->arg(0).c_str());
+        }
+    }
+}
+
+lms_hls_config_struct *lms_hls_config_struct::copy()
+{
+    lms_hls_config_struct *ret = new lms_hls_config_struct();
+    ret->exist_enable = exist_enable;
+    ret->enable = enable;
+    ret->exist_window = exist_window;
+    ret->window = window;
+    ret->exist_fragment = exist_fragment;
+    ret->fragment = fragment;
+    ret->exist_acodec = exist_acodec;
+    ret->acodec = acodec;
+    ret->exist_vcodec = exist_vcodec;
+    ret->vcodec = vcodec;
+    ret->exist_m3u8_path = exist_m3u8_path;
+    ret->m3u8_path = m3u8_path;
+    ret->exist_ts_path = exist_ts_path;
+    ret->ts_path = ts_path;
+    ret->exist_time_jitter = exist_time_jitter;
+    ret->time_jitter = time_jitter;
+    ret->exist_jitter_type = exist_jitter_type;
+    ret->time_jitter_type = time_jitter_type;
+    ret->exist_root = exist_root;
+    ret->root = root;
+
+    return ret;
+}
+
+bool lms_hls_config_struct::get_enable(bool &value)
+{
+    if (exist_enable) {
+        value = enable;
+    }
+    return exist_enable;
+}
+
+bool lms_hls_config_struct::get_window(double &value)
+{
+    if (exist_window) {
+        value = window;
+    }
+    return exist_window;
+}
+
+bool lms_hls_config_struct::get_fragment(double &value)
+{
+    if (exist_fragment) {
+        value = fragment;
+    }
+    return exist_fragment;
+
+}
+
+bool lms_hls_config_struct::get_acodec(DString &value)
+{
+    if (exist_acodec) {
+        value = acodec;
+    }
+    return exist_acodec;
+}
+
+bool lms_hls_config_struct::get_vcodec(DString &value)
+{
+    if (exist_vcodec) {
+        value = vcodec;
+    }
+    return exist_vcodec;
+}
+
+bool lms_hls_config_struct::get_m3u8_path(DString &value)
+{
+    if (exist_m3u8_path) {
+        value = m3u8_path;
+    }
+    return exist_m3u8_path;
+}
+
+bool lms_hls_config_struct::get_ts_path(DString &value)
+{
+    if (exist_ts_path) {
+        value = ts_path;
+    }
+    return exist_ts_path;
+}
+
+bool lms_hls_config_struct::get_time_jitter(bool &value)
+{
+    if (exist_time_jitter) {
+        value = time_jitter;
+    }
+    return exist_time_jitter;
+}
+
+bool lms_hls_config_struct::get_time_jitter_type(int &value)
+{
+    if (exist_jitter_type) {
+        value = time_jitter_type;
+    }
+    return exist_jitter_type;
+}
+
+bool lms_hls_config_struct::get_root(DString &value)
+{
+    if (exist_root) {
+        value = root;
+    }
+    return exist_root;
+}
+
+bool lms_hls_config_struct::get_time_expired(int &value)
+{
+    if (exist_time_expired) {
+        value = time_expired;
+    }
+    return exist_time_expired;
+}
+
+/*****************************************************************************/
+
+lms_ts_codec_struct::lms_ts_codec_struct()
+    : exist_acodec(false)
+    , exist_vcodec(false)
+{
+
+}
+
+lms_ts_codec_struct::~lms_ts_codec_struct()
+{
+
+}
+
+void lms_ts_codec_struct::load_config(lms_config_directive *directive)
+{
+    if (true) {
+        lms_config_directive *conf = directive->get("acodec");
+        if (conf && !conf->arg(0).isEmpty()) {
+            acodec = conf->arg(0);
+
+            exist_acodec = true;
+
+            log_trace("exist_acodec=%s", conf->arg(0).c_str());
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("vcodec");
+        if (conf && !conf->arg(0).isEmpty()) {
+            vcodec = conf->arg(0);
+
+            exist_vcodec = true;
+
+            log_trace("exist_vcodec=%s", conf->arg(0).c_str());
+        }
+    }
+}
+
+lms_ts_codec_struct *lms_ts_codec_struct::copy()
+{
+    lms_ts_codec_struct *ret = new lms_ts_codec_struct();
+    ret->exist_acodec = exist_acodec;
+    ret->acodec = acodec;
+    ret->exist_vcodec = exist_vcodec;
+    ret->vcodec = vcodec;
+
+    return ret;
+}
+
+bool lms_ts_codec_struct::get_acodec(DString &value)
+{
+    if (exist_acodec) {
+        value = acodec;
+    }
+    return exist_acodec;
+}
+
+bool lms_ts_codec_struct::get_vcodec(DString &value)
+{
+    if (exist_vcodec) {
+        value = vcodec;
+    }
+    return exist_vcodec;
+}
 
 /*****************************************************************************/
 
@@ -20,17 +355,26 @@ lms_proxy_config_struct::lms_proxy_config_struct()
     , exist_stream(false)
     , exist_timeout(false)
     , timeout(10)
+    , ts_codec(NULL)
 {
 
 }
 
 lms_proxy_config_struct::~lms_proxy_config_struct()
 {
-
+    DFree(ts_codec);
 }
 
 void lms_proxy_config_struct::load_config(lms_config_directive *directive)
 {
+    if (true) {
+        lms_config_directive *conf = directive->get("ts_codec");
+        if (conf) {
+            ts_codec = new lms_ts_codec_struct();
+            ts_codec->load_config(conf);
+        }
+    }
+
     if (true) {
         lms_config_directive *conf = directive->get("enable");
         if (conf && !conf->arg(0).isEmpty()) {
@@ -138,6 +482,10 @@ lms_proxy_config_struct *lms_proxy_config_struct::copy()
         proxy->proxy_pass.assign(proxy_pass.begin(), proxy_pass.end());
     }
 
+    if (ts_codec) {
+        proxy->ts_codec = ts_codec->copy();
+    }
+
     return proxy;
 }
 
@@ -198,6 +546,24 @@ bool lms_proxy_config_struct::get_proxy_timeout(int &value)
     return exist_timeout;
 }
 
+bool lms_proxy_config_struct::get_proxy_ts_acodec(DString &value)
+{
+    if (ts_codec) {
+        return ts_codec->get_acodec(value);
+    }
+
+    return false;
+}
+
+bool lms_proxy_config_struct::get_proxy_ts_vcodec(DString &value)
+{
+    if (ts_codec) {
+        return ts_codec->get_vcodec(value);
+    }
+
+    return false;
+}
+
 /*****************************************************************************/
 
 lms_live_config_struct::lms_live_config_struct()
@@ -209,8 +575,6 @@ lms_live_config_struct::lms_live_config_struct()
     , gop_cache(true)
     , exist_fast_gop(false)
     , fast_gop(false)
-    , exist_timeout(false)
-    , timeout(30)
     , exist_queue_size(false)
     , queue_size(30)
 {
@@ -284,18 +648,6 @@ void lms_live_config_struct::load_config(lms_config_directive *directive)
     }
 
     if (true) {
-        lms_config_directive *conf = directive->get("timeout");
-
-        if (conf && !conf->arg(0).isEmpty()) {
-            timeout = conf->arg(0).toInt();
-
-            exist_timeout = true;
-
-            log_trace("timeout=%s", conf->arg(0).c_str());
-        }
-    }
-
-    if (true) {
         lms_config_directive *conf = directive->get("queue_size");
 
         if (conf && !conf->arg(0).isEmpty()) {
@@ -320,8 +672,7 @@ lms_live_config_struct *lms_live_config_struct::copy()
     live->gop_cache = gop_cache;
     live->exist_fast_gop = exist_fast_gop;
     live->fast_gop = fast_gop;
-    live->exist_timeout = exist_timeout;
-    live->timeout = timeout;
+    live->exist_queue_size = exist_queue_size;
     live->queue_size = queue_size;
 
     return live;
@@ -359,14 +710,6 @@ bool lms_live_config_struct::get_fast_gop(bool &gop)
     return exist_fast_gop;
 }
 
-bool lms_live_config_struct::get_timeout(int &time)
-{
-    if (exist_timeout) {
-        time = timeout;
-    }
-    return exist_timeout;
-}
-
 bool lms_live_config_struct::get_queue_size(int &size)
 {
     if (exist_queue_size) {
@@ -382,6 +725,10 @@ lms_rtmp_config_struct::lms_rtmp_config_struct()
     , enable(true)
     , exist_chunk_size(false)
     , chunk_size(4096)
+    , exist_in_ack_size(false)
+    , in_ack_size(0)
+    , exist_timeout(false)
+    , timeout(30)
 {
 
 }
@@ -416,6 +763,29 @@ void lms_rtmp_config_struct::load_config(lms_config_directive *directive)
             log_trace("chunk_size=%s", conf->arg(0).c_str());
         }
     }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("in_ack_size");
+        if (conf && !conf->arg(0).isEmpty()) {
+            in_ack_size = conf->arg(0).toInt();
+
+            exist_in_ack_size = true;
+
+            log_trace("in_ack_size=%s", conf->arg(0).c_str());
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("timeout");
+
+        if (conf && !conf->arg(0).isEmpty()) {
+            timeout = conf->arg(0).toInt();
+
+            exist_timeout = true;
+
+            log_trace("timeout=%s", conf->arg(0).c_str());
+        }
+    }
 }
 
 lms_rtmp_config_struct *lms_rtmp_config_struct::copy()
@@ -426,6 +796,10 @@ lms_rtmp_config_struct *lms_rtmp_config_struct::copy()
     rtmp->enable = enable;
     rtmp->exist_chunk_size = exist_chunk_size;
     rtmp->chunk_size = chunk_size;
+    rtmp->exist_in_ack_size = exist_in_ack_size;
+    rtmp->in_ack_size = in_ack_size;
+    rtmp->exist_timeout = exist_timeout;
+    rtmp->timeout = timeout;
 
     return rtmp;
 }
@@ -446,6 +820,22 @@ bool lms_rtmp_config_struct::get_chunk_size(int &val)
     return exist_chunk_size;
 }
 
+bool lms_rtmp_config_struct::get_in_ack_size(int &val)
+{
+    if (exist_in_ack_size) {
+        val = in_ack_size;
+    }
+    return exist_in_ack_size;
+}
+
+bool lms_rtmp_config_struct::get_timeout(int &time)
+{
+    if (exist_timeout) {
+        time = timeout;
+    }
+    return exist_timeout;
+}
+
 /*****************************************************************************/
 
 lms_http_config_struct::lms_http_config_struct()
@@ -456,17 +846,36 @@ lms_http_config_struct::lms_http_config_struct()
     , exist_chunked(false)
     , chunked(true)
     , exist_root(false)
+    , exist_timeout(false)
+    , timeout(30)
+    , exist_flv_live_enable(false)
+    , flv_live_enable(false)
+    , exist_flv_recv_enable(false)
+    , flv_recv_enable(false)
+    , exist_ts_recv_enable(false)
+    , ts_recv_enable(false)
+    , exist_ts_live_enable(false)
+    , ts_live_enable(false)
+    , ts_codec(NULL)
 {
 
 }
 
 lms_http_config_struct::~lms_http_config_struct()
 {
-
+    DFree(ts_codec);
 }
 
 void lms_http_config_struct::load_config(lms_config_directive *directive)
 {
+    if (true) {
+        lms_config_directive *conf = directive->get("ts_codec");
+        if (conf) {
+            ts_codec = new lms_ts_codec_struct();
+            ts_codec->load_config(conf);
+        }
+    }
+
     if (true) {
         lms_config_directive *conf = directive->get("enable");
         if (conf && !conf->arg(0).isEmpty()) {
@@ -514,6 +923,66 @@ void lms_http_config_struct::load_config(lms_config_directive *directive)
             log_trace("root=%s", conf->arg(0).c_str());
         }
     }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("timeout");
+
+        if (conf && !conf->arg(0).isEmpty()) {
+            timeout = conf->arg(0).toInt();
+
+            exist_timeout = true;
+
+            log_trace("timeout=%s", conf->arg(0).c_str());
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("flv_live_enable");
+
+        if (conf && !conf->arg(0).isEmpty()) {
+            if (conf->arg(0) == "on") {
+                flv_live_enable = true;
+            }
+
+            exist_flv_live_enable = true;
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("flv_recv_enable");
+
+        if (conf && !conf->arg(0).isEmpty()) {
+            if (conf->arg(0) == "on") {
+                flv_recv_enable = true;
+            }
+
+            exist_flv_recv_enable = true;
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("ts_recv_enable");
+
+        if (conf && !conf->arg(0).isEmpty()) {
+            if (conf->arg(0) == "on") {
+                ts_recv_enable = true;
+            }
+
+            exist_ts_recv_enable = true;
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("ts_live_enable");
+
+        if (conf && !conf->arg(0).isEmpty()) {
+            if (conf->arg(0) == "on") {
+                ts_live_enable = true;
+            }
+
+            exist_ts_live_enable = true;
+        }
+    }
 }
 
 lms_http_config_struct *lms_http_config_struct::copy()
@@ -528,6 +997,20 @@ lms_http_config_struct *lms_http_config_struct::copy()
     http->chunked = chunked;
     http->exist_root = exist_root;
     http->root = root;
+    http->exist_timeout = exist_timeout;
+    http->timeout = timeout;
+    http->exist_flv_live_enable = exist_flv_live_enable;
+    http->flv_live_enable = flv_live_enable;
+    http->exist_flv_recv_enable = exist_flv_recv_enable;
+    http->flv_recv_enable = flv_recv_enable;
+    http->exist_ts_recv_enable = exist_ts_recv_enable;
+    http->ts_recv_enable = ts_recv_enable;
+    http->exist_ts_live_enable = exist_ts_live_enable;
+    http->ts_live_enable = ts_live_enable;
+
+    if (ts_codec) {
+        http->ts_codec = ts_codec->copy();
+    }
 
     return http;
 
@@ -563,6 +1046,68 @@ bool lms_http_config_struct::get_root(DString &val)
         val = root;
     }
     return exist_root;
+}
+
+bool lms_http_config_struct::get_timeout(int &time)
+{
+    if (exist_timeout) {
+        time = timeout;
+    }
+    return exist_timeout;
+}
+
+bool lms_http_config_struct::get_flv_live_enable(bool &val)
+{
+    if (exist_flv_live_enable) {
+        val = flv_live_enable;
+    }
+
+    return exist_flv_live_enable;
+}
+
+bool lms_http_config_struct::get_flv_recv_enable(bool &val)
+{
+    if (exist_flv_recv_enable) {
+        val = flv_recv_enable;
+    }
+
+    return exist_flv_recv_enable;
+}
+
+bool lms_http_config_struct::get_ts_live_enable(bool &val)
+{
+    if (exist_ts_live_enable) {
+        val = ts_live_enable;
+    }
+
+    return exist_ts_live_enable;
+}
+
+bool lms_http_config_struct::get_ts_live_acodec(DString &val)
+{
+    if (ts_codec) {
+        return ts_codec->get_acodec(val);
+    }
+
+    return false;
+}
+
+bool lms_http_config_struct::get_ts_live_vcodec(DString &val)
+{
+    if (ts_codec) {
+        return ts_codec->get_vcodec(val);
+    }
+
+    return false;
+}
+
+bool lms_http_config_struct::get_ts_recv_enable(bool &val)
+{
+    if (exist_ts_recv_enable) {
+        val = ts_recv_enable;
+    }
+
+    return exist_ts_recv_enable;
 }
 
 /*****************************************************************************/
@@ -882,6 +1427,7 @@ lms_location_config_struct::lms_location_config_struct()
     , http(NULL)
     , refer(NULL)
     , hook(NULL)
+    , hls(NULL)
 {
 
 }
@@ -894,6 +1440,7 @@ lms_location_config_struct::~lms_location_config_struct()
     DFree(http);
     DFree(refer);
     DFree(hook);
+    DFree(hls);
 }
 
 void lms_location_config_struct::load_config(lms_config_directive *directive)
@@ -954,6 +1501,14 @@ void lms_location_config_struct::load_config(lms_config_directive *directive)
             hook->load_config(conf);
         }
     }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("hls");
+        if (conf) {
+            hls = new lms_hls_config_struct();
+            hls->load_config(conf);
+        }
+    }
 }
 
 lms_location_config_struct *lms_location_config_struct::copy()
@@ -980,11 +1535,14 @@ lms_location_config_struct *lms_location_config_struct::copy()
     if (hook) {
         location->hook = hook->copy();
     }
+    if (hls) {
+        location->hls = hls->copy();
+    }
 
     return location;
 }
 
-bool lms_location_config_struct::get_matched(rtmp_request *req)
+bool lms_location_config_struct::get_matched(kernel_request *req)
 {
     DString location;
     if (req->app.empty()) {
@@ -1015,9 +1573,7 @@ bool lms_location_config_struct::get_matched(rtmp_request *req)
 bool lms_location_config_struct::get_rtmp_enable(bool &value)
 {
     if (rtmp) {
-        if (rtmp->get_enable(value)) {
-            return true;
-        }
+        return rtmp->get_enable(value);
     }
 
     return false;
@@ -1026,9 +1582,16 @@ bool lms_location_config_struct::get_rtmp_enable(bool &value)
 bool lms_location_config_struct::get_rtmp_chunk_size(int &value)
 {
     if (rtmp) {
-        if (rtmp->get_chunk_size(value)) {
-            return true;
-        }
+        return rtmp->get_chunk_size(value);
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_rtmp_in_ack_size(int &value)
+{
+    if (rtmp) {
+        return rtmp->get_in_ack_size(value);
     }
 
     return false;
@@ -1037,9 +1600,7 @@ bool lms_location_config_struct::get_rtmp_chunk_size(int &value)
 bool lms_location_config_struct::get_time_jitter(bool &value)
 {
     if (live) {
-        if (live->get_jitter(value)) {
-            return true;
-        }
+        return live->get_jitter(value);
     }
 
     return false;
@@ -1048,9 +1609,7 @@ bool lms_location_config_struct::get_time_jitter(bool &value)
 bool lms_location_config_struct::get_time_jitter_type(int &value)
 {
     if (live) {
-        if (live->get_jitter_type(value)) {
-            return true;
-        }
+        return live->get_jitter_type(value);
     }
 
     return false;
@@ -1059,9 +1618,7 @@ bool lms_location_config_struct::get_time_jitter_type(int &value)
 bool lms_location_config_struct::get_gop_cache(bool &value)
 {
     if (live) {
-        if (live->get_gop_cache(value)) {
-            return true;
-        }
+        return live->get_gop_cache(value);
     }
 
     return false;
@@ -1070,20 +1627,16 @@ bool lms_location_config_struct::get_gop_cache(bool &value)
 bool lms_location_config_struct::get_fast_gop(bool &value)
 {
     if (live) {
-        if (live->get_fast_gop(value)) {
-            return true;
-        }
+        return live->get_fast_gop(value);
     }
 
     return false;
 }
 
-bool lms_location_config_struct::get_timeout(int &value)
+bool lms_location_config_struct::get_rtmp_timeout(int &value)
 {
-    if (live) {
-        if (live->get_timeout(value)) {
-            return true;
-        }
+    if (rtmp) {
+        return rtmp->get_timeout(value);
     }
 
     return false;
@@ -1092,9 +1645,7 @@ bool lms_location_config_struct::get_timeout(int &value)
 bool lms_location_config_struct::get_queue_size(int &value)
 {
     if (live) {
-        if (live->get_queue_size(value)) {
-            return true;
-        }
+        return live->get_queue_size(value);
     }
 
     return false;
@@ -1103,9 +1654,7 @@ bool lms_location_config_struct::get_queue_size(int &value)
 bool lms_location_config_struct::get_proxy_enable(bool &value)
 {
     if (proxy) {
-        if (proxy->get_proxy_enable(value)) {
-            return true;
-        }
+        return proxy->get_proxy_enable(value);
     }
 
     return false;
@@ -1114,9 +1663,7 @@ bool lms_location_config_struct::get_proxy_enable(bool &value)
 bool lms_location_config_struct::get_proxy_type(DString &value)
 {
     if (proxy) {
-        if (proxy->get_proxy_type(value)) {
-            return true;
-        }
+        return proxy->get_proxy_type(value);
     }
 
     return false;
@@ -1134,9 +1681,7 @@ bool lms_location_config_struct::get_proxy_pass(std::vector<DString> &value)
 bool lms_location_config_struct::get_proxy_vhost(DString &value)
 {
     if (proxy) {
-        if (proxy->get_proxy_vhost(value)) {
-            return true;
-        }
+        return proxy->get_proxy_vhost(value);
     }
 
     return false;
@@ -1145,9 +1690,7 @@ bool lms_location_config_struct::get_proxy_vhost(DString &value)
 bool lms_location_config_struct::get_proxy_app(DString &value)
 {
     if (proxy) {
-        if (proxy->get_proxy_app(value)) {
-            return true;
-        }
+        return proxy->get_proxy_app(value);
     }
 
     return false;
@@ -1156,9 +1699,7 @@ bool lms_location_config_struct::get_proxy_app(DString &value)
 bool lms_location_config_struct::get_proxy_stream(DString &value)
 {
     if (proxy) {
-        if (proxy->get_proxy_stream(value)) {
-            return true;
-        }
+        return proxy->get_proxy_stream(value);
     }
 
     return false;
@@ -1167,9 +1708,25 @@ bool lms_location_config_struct::get_proxy_stream(DString &value)
 bool lms_location_config_struct::get_proxy_timeout(int &value)
 {
     if (proxy) {
-        if (proxy->get_proxy_timeout(value)) {
-            return true;
-        }
+        return proxy->get_proxy_timeout(value);
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_proxy_ts_acodec(DString &value)
+{
+    if (proxy) {
+        return proxy->get_proxy_ts_acodec(value);
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_proxy_ts_vcodec(DString &value)
+{
+    if (proxy) {
+        return proxy->get_proxy_ts_vcodec(value);
     }
 
     return false;
@@ -1178,9 +1735,7 @@ bool lms_location_config_struct::get_proxy_timeout(int &value)
 bool lms_location_config_struct::get_http_enable(bool &value)
 {
     if (http) {
-        if (http->get_enable(value)) {
-            return true;
-        }
+        return http->get_enable(value);
     }
 
     return false;
@@ -1189,9 +1744,7 @@ bool lms_location_config_struct::get_http_enable(bool &value)
 bool lms_location_config_struct::get_http_buffer_length(int &value)
 {
     if (http) {
-        if (http->get_buffer_length(value)) {
-            return true;
-        }
+        return http->get_buffer_length(value);
     }
 
     return false;
@@ -1200,9 +1753,7 @@ bool lms_location_config_struct::get_http_buffer_length(int &value)
 bool lms_location_config_struct::get_http_chunked(bool &value)
 {
     if (http) {
-        if (http->get_chunked(value)) {
-            return true;
-        }
+        return http->get_chunked(value);
     }
 
     return false;
@@ -1211,9 +1762,70 @@ bool lms_location_config_struct::get_http_chunked(bool &value)
 bool lms_location_config_struct::get_http_root(DString &value)
 {
     if (http) {
-        if (http->get_root(value)) {
-            return true;
-        }
+        return http->get_root(value);
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_http_timeout(int &value)
+{
+    if (http) {
+        return http->get_timeout(value);
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_flv_live_enable(bool &value)
+{
+    if (http) {
+        return http->get_flv_live_enable(value);
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_flv_recv_enable(bool &value)
+{
+    if (http) {
+        return http->get_flv_recv_enable(value);
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_ts_live_enable(bool &value)
+{
+    if (http) {
+        return http->get_ts_live_enable(value);
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_ts_live_acodec(DString &value)
+{
+    if (http) {
+        return http->get_ts_live_acodec(value);
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_ts_live_vcodec(DString &value)
+{
+    if (http) {
+        return http->get_ts_live_vcodec(value);
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_ts_recv_enable(bool &value)
+{
+    if (http) {
+        return http->get_ts_recv_enable(value);
     }
 
     return false;
@@ -1340,6 +1952,127 @@ bool lms_location_config_struct::get_hook_timeout(int &value)
     return false;
 }
 
+bool lms_location_config_struct::get_hls_enable(bool &value)
+{
+    if (hls) {
+        if (hls->get_enable(value)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_hls_window(double &value)
+{
+    if (hls) {
+        if (hls->get_window(value)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_hls_fragment(double &value)
+{
+    if (hls) {
+        if (hls->get_fragment(value)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_hls_acodec(DString &value)
+{
+    if (hls) {
+        if (hls->get_acodec(value)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_hls_vcodec(DString &value)
+{
+    if (hls) {
+        if (hls->get_vcodec(value)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_hls_m3u8_path(DString &value)
+{
+    if (hls) {
+        if (hls->get_m3u8_path(value)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_hls_ts_path(DString &value)
+{
+    if (hls) {
+        if (hls->get_ts_path(value)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_hls_time_jitter(bool &value)
+{
+    if (hls) {
+        if (hls->get_time_jitter(value)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_hls_time_jitter_type(int &value)
+{
+    if (hls) {
+        if (hls->get_time_jitter_type(value)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_hls_root(DString &value)
+{
+    if (hls) {
+        if (hls->get_root(value)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_hls_time_expired(int &value)
+{
+    if (hls) {
+        if (hls->get_time_expired(value)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /*****************************************************************************/
 
 lms_server_config_struct::lms_server_config_struct()
@@ -1349,6 +2082,7 @@ lms_server_config_struct::lms_server_config_struct()
     , http(NULL)
     , refer(NULL)
     , hook(NULL)
+    , hls(NULL)
 {
 
 }
@@ -1361,6 +2095,7 @@ lms_server_config_struct::~lms_server_config_struct()
     DFree(http);
     DFree(refer);
     DFree(hook);
+    DFree(hls);
 
     for (int i = 0; i < (int)locations.size(); ++i) {
         DFree(locations.at(i));
@@ -1435,6 +2170,15 @@ void lms_server_config_struct::load_config(lms_config_directive *directive)
     }
 
     if (true) {
+        lms_config_directive *conf = directive->get("hls");
+
+        if (conf) {
+            hls = new lms_hls_config_struct();
+            hls->load_config(conf);
+        }
+    }
+
+    if (true) {
         std::vector<lms_config_directive*>::iterator it;
 
         for (it = directive->directives.begin(); it != directive->directives.end(); ++it) {
@@ -1475,6 +2219,9 @@ lms_server_config_struct *lms_server_config_struct::copy()
     if (hook) {
         server->hook = hook->copy();
     }
+    if (hls) {
+        server->hls = hls->copy();
+    }
 
     for (int i = 0; i < (int)locations.size(); ++i) {
         server->locations.push_back(locations.at(i)->copy());
@@ -1483,7 +2230,7 @@ lms_server_config_struct *lms_server_config_struct::copy()
     return server;
 }
 
-bool lms_server_config_struct::get_matched(rtmp_request *req)
+bool lms_server_config_struct::get_matched(kernel_request *req)
 {
     for(int i = 0; i < (int)server_name.size(); ++i) {
         DRegExp regex(server_name.at(i));
@@ -1495,7 +2242,7 @@ bool lms_server_config_struct::get_matched(rtmp_request *req)
     return false;
 }
 
-bool lms_server_config_struct::get_rtmp_enable(rtmp_request *req)
+bool lms_server_config_struct::get_rtmp_enable(kernel_request *req)
 {
     bool ret = true;
 
@@ -1517,7 +2264,7 @@ bool lms_server_config_struct::get_rtmp_enable(rtmp_request *req)
     return ret;
 }
 
-int lms_server_config_struct::get_rtmp_chunk_size(rtmp_request *req)
+int lms_server_config_struct::get_rtmp_chunk_size(kernel_request *req)
 {
     int ret = 4096;
 
@@ -1539,7 +2286,29 @@ int lms_server_config_struct::get_rtmp_chunk_size(rtmp_request *req)
     return ret;
 }
 
-bool lms_server_config_struct::get_time_jitter(rtmp_request *req)
+int lms_server_config_struct::get_rtmp_in_ack_size(kernel_request *req)
+{
+    int ret = 0;
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_rtmp_in_ack_size(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (rtmp) {
+        rtmp->get_in_ack_size(ret);
+    }
+
+    return ret;
+}
+
+bool lms_server_config_struct::get_time_jitter(kernel_request *req)
 {
     bool ret = true;
 
@@ -1561,7 +2330,7 @@ bool lms_server_config_struct::get_time_jitter(rtmp_request *req)
     return ret;
 }
 
-int lms_server_config_struct::get_time_jitter_type(rtmp_request *req)
+int lms_server_config_struct::get_time_jitter_type(kernel_request *req)
 {
     int ret = LmsTimeStamp::middle;
 
@@ -1583,7 +2352,7 @@ int lms_server_config_struct::get_time_jitter_type(rtmp_request *req)
     return ret;
 }
 
-bool lms_server_config_struct::get_gop_cache(rtmp_request *req)
+bool lms_server_config_struct::get_gop_cache(kernel_request *req)
 {
     bool ret = true;
 
@@ -1605,7 +2374,7 @@ bool lms_server_config_struct::get_gop_cache(rtmp_request *req)
     return ret;
 }
 
-bool lms_server_config_struct::get_fast_gop(rtmp_request *req)
+bool lms_server_config_struct::get_fast_gop(kernel_request *req)
 {
     bool ret = false;
 
@@ -1627,7 +2396,7 @@ bool lms_server_config_struct::get_fast_gop(rtmp_request *req)
     return ret;
 }
 
-int lms_server_config_struct::get_timeout(rtmp_request *req)
+int lms_server_config_struct::get_rtmp_timeout(kernel_request *req)
 {
     int ret = 30;
 
@@ -1635,21 +2404,21 @@ int lms_server_config_struct::get_timeout(rtmp_request *req)
         lms_location_config_struct *location = locations.at(i);
 
         if (location->get_matched(req)) {
-            if (location->get_timeout(ret)) {
+            if (location->get_rtmp_timeout(ret)) {
                 return ret;
             }
             break;
         }
     }
 
-    if (live) {
-        live->get_timeout(ret);
+    if (rtmp) {
+        rtmp->get_timeout(ret);
     }
 
     return ret;
 }
 
-int lms_server_config_struct::get_queue_size(rtmp_request *req)
+int lms_server_config_struct::get_queue_size(kernel_request *req)
 {
     int ret = 30;
 
@@ -1671,7 +2440,7 @@ int lms_server_config_struct::get_queue_size(rtmp_request *req)
     return ret;
 }
 
-bool lms_server_config_struct::get_proxy_enable(rtmp_request *req)
+bool lms_server_config_struct::get_proxy_enable(kernel_request *req)
 {
     bool ret = false;
 
@@ -1693,7 +2462,7 @@ bool lms_server_config_struct::get_proxy_enable(rtmp_request *req)
     return ret;
 }
 
-DString lms_server_config_struct::get_proxy_type(rtmp_request *req)
+DString lms_server_config_struct::get_proxy_type(kernel_request *req)
 {
     DString ret = "rtmp";
 
@@ -1715,7 +2484,7 @@ DString lms_server_config_struct::get_proxy_type(rtmp_request *req)
     return ret;
 }
 
-std::vector<DString> lms_server_config_struct::get_proxy_pass(rtmp_request *req)
+std::vector<DString> lms_server_config_struct::get_proxy_pass(kernel_request *req)
 {
     std::vector<DString> ret;
 
@@ -1737,7 +2506,7 @@ std::vector<DString> lms_server_config_struct::get_proxy_pass(rtmp_request *req)
     return ret;
 }
 
-DString lms_server_config_struct::get_proxy_vhost(rtmp_request *req)
+DString lms_server_config_struct::get_proxy_vhost(kernel_request *req)
 {
     DString ret = "[vhost]";
 
@@ -1759,7 +2528,7 @@ DString lms_server_config_struct::get_proxy_vhost(rtmp_request *req)
     return ret;
 }
 
-DString lms_server_config_struct::get_proxy_app(rtmp_request *req)
+DString lms_server_config_struct::get_proxy_app(kernel_request *req)
 {
     DString ret = "[app]";
 
@@ -1781,7 +2550,7 @@ DString lms_server_config_struct::get_proxy_app(rtmp_request *req)
     return ret;
 }
 
-DString lms_server_config_struct::get_proxy_stream(rtmp_request *req)
+DString lms_server_config_struct::get_proxy_stream(kernel_request *req)
 {
     DString ret = "[stream]";
 
@@ -1803,7 +2572,7 @@ DString lms_server_config_struct::get_proxy_stream(rtmp_request *req)
     return ret;
 }
 
-int lms_server_config_struct::get_proxy_timeout(rtmp_request *req)
+int lms_server_config_struct::get_proxy_timeout(kernel_request *req)
 {
     int ret = 10;
 
@@ -1825,7 +2594,51 @@ int lms_server_config_struct::get_proxy_timeout(rtmp_request *req)
     return ret;
 }
 
-bool lms_server_config_struct::get_http_enable(rtmp_request *req)
+DString lms_server_config_struct::get_proxy_ts_acodec(kernel_request *req)
+{
+    DString ret = "aac";
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_proxy_ts_acodec(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (proxy) {
+        proxy->get_proxy_ts_acodec(ret);
+    }
+
+    return ret;
+}
+
+DString lms_server_config_struct::get_proxy_ts_vcodec(kernel_request *req)
+{
+    DString ret = "h264";
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_proxy_ts_vcodec(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (proxy) {
+        proxy->get_proxy_ts_vcodec(ret);
+    }
+
+    return ret;
+}
+
+bool lms_server_config_struct::get_http_enable(kernel_request *req)
 {
     bool ret = true;
 
@@ -1847,7 +2660,7 @@ bool lms_server_config_struct::get_http_enable(rtmp_request *req)
     return ret;
 }
 
-int lms_server_config_struct::get_http_buffer_length(rtmp_request *req)
+int lms_server_config_struct::get_http_buffer_length(kernel_request *req)
 {
     int ret = 3000;
 
@@ -1869,7 +2682,7 @@ int lms_server_config_struct::get_http_buffer_length(rtmp_request *req)
     return ret;
 }
 
-bool lms_server_config_struct::get_http_chunked(rtmp_request *req)
+bool lms_server_config_struct::get_http_chunked(kernel_request *req)
 {
     bool ret = true;
 
@@ -1891,7 +2704,7 @@ bool lms_server_config_struct::get_http_chunked(rtmp_request *req)
     return ret;
 }
 
-DString lms_server_config_struct::get_http_root(rtmp_request *req)
+DString lms_server_config_struct::get_http_root(kernel_request *req)
 {
     DString ret = "html";
 
@@ -1913,7 +2726,177 @@ DString lms_server_config_struct::get_http_root(rtmp_request *req)
     return ret;
 }
 
-bool lms_server_config_struct::get_refer_enable(rtmp_request *req)
+int lms_server_config_struct::get_http_timeout(kernel_request *req)
+{
+    int ret = 30;
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_http_timeout(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (http) {
+        http->get_timeout(ret);
+    }
+
+    return ret;
+}
+
+bool lms_server_config_struct::get_flv_live_enable(kernel_request *req)
+{
+    bool ret = false;
+
+    if (!get_http_enable(req)) {
+        return ret;
+    }
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_flv_live_enable(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (http) {
+        http->get_flv_live_enable(ret);
+    }
+
+    return ret;
+}
+
+bool lms_server_config_struct::get_flv_recv_enable(kernel_request *req)
+{
+    bool ret = false;
+
+    if (!get_http_enable(req)) {
+        return ret;
+    }
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_flv_recv_enable(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (http) {
+        http->get_flv_recv_enable(ret);
+    }
+
+    return ret;
+}
+
+bool lms_server_config_struct::get_ts_live_enable(kernel_request *req)
+{
+    bool ret = false;
+
+    if (!get_http_enable(req)) {
+        return ret;
+    }
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_ts_live_enable(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (http) {
+        http->get_ts_live_enable(ret);
+    }
+
+    return ret;
+}
+
+DString lms_server_config_struct::get_ts_live_acodec(kernel_request *req)
+{
+    DString ret = "aac";
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_ts_live_acodec(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (http) {
+        http->get_ts_live_acodec(ret);
+    }
+
+    return ret;
+}
+
+DString lms_server_config_struct::get_ts_live_vcodec(kernel_request *req)
+{
+    DString ret = "h264";
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_ts_live_vcodec(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (http) {
+        http->get_ts_live_vcodec(ret);
+    }
+
+    return ret;
+}
+
+bool lms_server_config_struct::get_ts_recv_enable(kernel_request *req)
+{
+    bool ret = false;
+
+    if (!get_http_enable(req)) {
+        return ret;
+    }
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_ts_recv_enable(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (http) {
+        http->get_ts_recv_enable(ret);
+    }
+
+    return ret;
+}
+
+bool lms_server_config_struct::get_refer_enable(kernel_request *req)
 {
     bool ret = false;
 
@@ -1935,7 +2918,7 @@ bool lms_server_config_struct::get_refer_enable(rtmp_request *req)
     return ret;
 }
 
-std::vector<DString> lms_server_config_struct::get_refer_all(rtmp_request *req)
+std::vector<DString> lms_server_config_struct::get_refer_all(kernel_request *req)
 {
     std::vector<DString> ret;
 
@@ -1957,7 +2940,7 @@ std::vector<DString> lms_server_config_struct::get_refer_all(rtmp_request *req)
     return ret;
 }
 
-std::vector<DString> lms_server_config_struct::get_refer_publish(rtmp_request *req)
+std::vector<DString> lms_server_config_struct::get_refer_publish(kernel_request *req)
 {
     std::vector<DString> ret;
 
@@ -1979,7 +2962,7 @@ std::vector<DString> lms_server_config_struct::get_refer_publish(rtmp_request *r
     return ret;
 }
 
-std::vector<DString> lms_server_config_struct::get_refer_play(rtmp_request *req)
+std::vector<DString> lms_server_config_struct::get_refer_play(kernel_request *req)
 {
     std::vector<DString> ret;
 
@@ -2001,7 +2984,7 @@ std::vector<DString> lms_server_config_struct::get_refer_play(rtmp_request *req)
     return ret;
 }
 
-DString lms_server_config_struct::get_hook_rtmp_connect(rtmp_request *req)
+DString lms_server_config_struct::get_hook_rtmp_connect(kernel_request *req)
 {
     DString ret;
 
@@ -2023,7 +3006,7 @@ DString lms_server_config_struct::get_hook_rtmp_connect(rtmp_request *req)
     return ret;
 }
 
-DString lms_server_config_struct::get_hook_rtmp_connect_pattern(rtmp_request *req)
+DString lms_server_config_struct::get_hook_rtmp_connect_pattern(kernel_request *req)
 {
     DString ret;
 
@@ -2045,7 +3028,7 @@ DString lms_server_config_struct::get_hook_rtmp_connect_pattern(rtmp_request *re
     return ret;
 }
 
-DString lms_server_config_struct::get_hook_rtmp_publish(rtmp_request *req)
+DString lms_server_config_struct::get_hook_rtmp_publish(kernel_request *req)
 {
     DString ret;
 
@@ -2067,7 +3050,7 @@ DString lms_server_config_struct::get_hook_rtmp_publish(rtmp_request *req)
     return ret;
 }
 
-DString lms_server_config_struct::get_hook_rtmp_publish_pattern(rtmp_request *req)
+DString lms_server_config_struct::get_hook_rtmp_publish_pattern(kernel_request *req)
 {
     DString ret;
 
@@ -2089,7 +3072,7 @@ DString lms_server_config_struct::get_hook_rtmp_publish_pattern(rtmp_request *re
     return ret;
 }
 
-DString lms_server_config_struct::get_hook_rtmp_play(rtmp_request *req)
+DString lms_server_config_struct::get_hook_rtmp_play(kernel_request *req)
 {
     DString ret;
 
@@ -2111,7 +3094,7 @@ DString lms_server_config_struct::get_hook_rtmp_play(rtmp_request *req)
     return ret;
 }
 
-DString lms_server_config_struct::get_hook_rtmp_play_pattern(rtmp_request *req)
+DString lms_server_config_struct::get_hook_rtmp_play_pattern(kernel_request *req)
 {
     DString ret;
 
@@ -2133,7 +3116,7 @@ DString lms_server_config_struct::get_hook_rtmp_play_pattern(rtmp_request *req)
     return ret;
 }
 
-DString lms_server_config_struct::get_hook_rtmp_unpublish(rtmp_request *req)
+DString lms_server_config_struct::get_hook_rtmp_unpublish(kernel_request *req)
 {
     DString ret;
 
@@ -2155,7 +3138,7 @@ DString lms_server_config_struct::get_hook_rtmp_unpublish(rtmp_request *req)
     return ret;
 }
 
-DString lms_server_config_struct::get_hook_rtmp_stop(rtmp_request *req)
+DString lms_server_config_struct::get_hook_rtmp_stop(kernel_request *req)
 {
     DString ret;
 
@@ -2177,7 +3160,7 @@ DString lms_server_config_struct::get_hook_rtmp_stop(rtmp_request *req)
     return ret;
 }
 
-int lms_server_config_struct::get_hook_timeout(rtmp_request *req)
+int lms_server_config_struct::get_hook_timeout(kernel_request *req)
 {
     int ret = 10;
 
@@ -2199,6 +3182,248 @@ int lms_server_config_struct::get_hook_timeout(rtmp_request *req)
     return ret;
 }
 
+bool lms_server_config_struct::get_hls_enable(kernel_request *req)
+{
+    bool ret = false;
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_hls_enable(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (hls) {
+        hls->get_enable(ret);
+    }
+
+    return ret;
+}
+
+double lms_server_config_struct::get_hls_window(kernel_request *req)
+{
+    double ret = 3;
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_hls_window(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (hls) {
+        hls->get_window(ret);
+    }
+
+    return ret;
+}
+
+double lms_server_config_struct::get_hls_fragment(kernel_request *req)
+{
+    double ret = 3;
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_hls_fragment(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (hls) {
+        hls->get_fragment(ret);
+    }
+
+    return ret;
+}
+
+DString lms_server_config_struct::get_hls_acodec(kernel_request *req)
+{
+    DString ret = "aac";
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_hls_acodec(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (hls) {
+        hls->get_acodec(ret);
+    }
+
+    return ret;
+}
+
+DString lms_server_config_struct::get_hls_vcodec(kernel_request *req)
+{
+    DString ret = "h264";
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_hls_vcodec(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (hls) {
+        hls->get_vcodec(ret);
+    }
+
+    return ret;
+}
+
+DString lms_server_config_struct::get_hls_m3u8_path(kernel_request *req)
+{
+    DString ret = "[stream].m3u8";
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_hls_m3u8_path(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (hls) {
+        hls->get_m3u8_path(ret);
+    }
+
+    return ret;
+}
+
+DString lms_server_config_struct::get_hls_ts_path(kernel_request *req)
+{
+    DString ret = "[yyyy]/[MM]/[dd]/[hh]/[mm]/[ss].ts";
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_hls_ts_path(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (hls) {
+        hls->get_ts_path(ret);
+    }
+
+    return ret;
+}
+
+bool lms_server_config_struct::get_hls_time_jitter(kernel_request *req)
+{
+    bool ret = false;
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_hls_time_jitter(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (hls) {
+        hls->get_time_jitter(ret);
+    }
+
+    return ret;
+}
+
+int lms_server_config_struct::get_hls_time_jitter_type(kernel_request *req)
+{
+    int ret = LmsTimeStamp::middle;
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_hls_time_jitter_type(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (hls) {
+        hls->get_time_jitter_type(ret);
+    }
+
+    return ret;
+}
+
+DString lms_server_config_struct::get_hls_root(kernel_request *req)
+{
+    DString ret = "html";
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_hls_root(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (hls) {
+        hls->get_root(ret);
+    }
+
+    return ret;
+}
+
+int lms_server_config_struct::get_hls_time_expired(kernel_request *req)
+{
+    int ret = 120;
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_hls_time_expired(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (hls) {
+        hls->get_time_expired(ret);
+    }
+
+    return ret;
+}
+
 /*****************************************************************************/
 
 lms_config_struct::lms_config_struct()
@@ -2211,12 +3436,6 @@ lms_config_struct::~lms_config_struct()
     for (int i = 0; i < (int)servers.size(); ++i) {
         DFree(servers.at(i));
     }
-}
-
-void lms_config_struct::load_config(lms_config_directive *directive)
-{
-    load_global_config(directive);
-    load_server_config(directive);
 }
 
 void lms_config_struct::load_global_config(lms_config_directive *directive)
@@ -2241,6 +3460,7 @@ void lms_config_struct::load_global_config(lms_config_directive *directive)
 
         if (conf && !conf->arg(0).isEmpty()) {
             worker_count = conf->arg(0).toInt();
+
             log_trace("worker_count=%s", conf->arg(0).c_str());
         }
     }
@@ -2337,9 +3557,22 @@ void lms_config_struct::load_global_config(lms_config_directive *directive)
             if (conf->arg(0) == "on") {
                 log_enable_file = true;
             }
-        }
 
-        log_trace("log_enable_file=%s", conf->arg(0).c_str());
+            log_trace("log_enable_file=%s", conf->arg(0).c_str());
+        }
+    }
+
+    if (true) {
+        mempool_enable = true;
+
+        lms_config_directive *conf = directive->get("mempool_enable");
+        if (conf && !conf->arg(0).isEmpty()) {
+            if (conf->arg(0) == "off") {
+                mempool_enable = false;
+            }
+
+            log_trace("mempool_enable=%s", conf->arg(0).c_str());
+        }
     }
 
     if (true) {
@@ -2367,20 +3600,9 @@ void lms_config_struct::load_global_config(lms_config_directive *directive)
 
 void lms_config_struct::load_server_config(lms_config_directive *directive)
 {
-    if (true) {
-        std::vector<lms_config_directive*>::iterator it;
-
-        for (it = directive->directives.begin(); it != directive->directives.end(); ++it) {
-            lms_config_directive* conf = *it;
-
-            if (conf->name == "server") {
-                lms_server_config_struct *server = new lms_server_config_struct();
-                server->load_config(conf);
-
-                servers.push_back(server);
-            }
-        }
-    }
+    lms_server_config_struct *server = new lms_server_config_struct();
+    server->load_config(directive);
+    servers.push_back(server);
 }
 
 /*****************************************************************************/
@@ -2403,36 +3625,58 @@ lms_config *lms_config::instance()
     return m_instance;
 }
 
-int lms_config::parse_file(const DString &filename)
+static DString config_path = "../conf/";
+static DString base_file = "lms.conf";
+
+int lms_config::parse_file()
 {
     int ret = ERROR_SUCCESS;
+
+    DSpinLocker locker(&m_mutex);
 
     lms_config_buffer buffer;
     lms_config_directive root;
 
-    if (!buffer.load_file(filename)) {
+    if (!buffer.load_file(config_path + base_file)) {
         ret = ERROR_CONFIG_LOAD_FILE;
-        log_error("load config file failed. file=%s, ret=%d", filename.c_str(), ret);
+        log_error("load config file failed. file=%s, ret=%d", base_file.c_str(), ret);
         return ret;
     }
 
     if ((ret = root.parse(&buffer)) != ERROR_SUCCESS) {
-        log_error("parse root directive failed. file=%s, ret=%d", filename.c_str(), ret);
+        log_error("parse root directive failed. file=%s, ret=%d", base_file.c_str(), ret);
         return ret;
     }
 
-    load_config(&root);
-
-    return ret;
-}
-
-void lms_config::load_config(lms_config_directive *directive)
-{
-    DSpinLocker locker(&m_mutex);
-
     DFree(m_config);
     m_config = new lms_config_struct();
-    m_config->load_config(directive);
+
+    lms_config_directive *child = root.get("child");
+    std::vector<lms_config_directive*>::iterator it;
+    for (it = child->directives.begin(); it != child->directives.end(); ++it) {
+        lms_config_directive* conf = *it;
+        DString name = conf->name;
+
+        lms_config_buffer child_buffer;
+        lms_config_directive child_directive;
+
+        if (!child_buffer.load_file(config_path + name)) {
+            ret = ERROR_CONFIG_LOAD_FILE;
+            log_error("load child config file failed. file=%s, ret=%d", name.c_str(), ret);
+            return ret;
+        }
+
+        if ((ret = child_directive.parse(&child_buffer)) != ERROR_SUCCESS) {
+            log_error("parse child directive failed. file=%s, ret=%d", name.c_str(), ret);
+            return ret;
+        }
+
+        m_config->load_server_config(&child_directive);
+    }
+
+    m_config->load_global_config(&root);
+
+    return ret;
 }
 
 bool lms_config::get_daemon()
@@ -2480,6 +3724,11 @@ bool lms_config::get_log_enable_file()
     return m_config->log_enable_file;
 }
 
+bool lms_config::get_mempool_enable()
+{
+    return m_config->mempool_enable;
+}
+
 std::vector<int> lms_config::get_rtmp_ports()
 {
     return m_config->rtmp_ports;
@@ -2490,7 +3739,7 @@ std::vector<int> lms_config::get_http_ports()
     return m_config->http_ports;
 }
 
-lms_server_config_struct *lms_config::get_server(rtmp_request *req)
+lms_server_config_struct *lms_config::get_server(kernel_request *req)
 {
     DSpinLocker locker(&m_mutex);
 

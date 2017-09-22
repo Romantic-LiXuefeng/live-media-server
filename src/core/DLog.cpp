@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/time.h>
+#include <inttypes.h>
 
 DLog::DLog()
     : m_logLevel(DLogLevel::Error)
@@ -228,7 +229,7 @@ void DLog::log(int level, const char *file, duint16 line, const char *function, 
         size += snprintf(buf + size, len - size, "[%s]", function);
     }
 
-    size += snprintf(buf + size, len - size, "[%llu]", id);
+    size += snprintf(buf + size, len - size, "[%"PRIu64 "]", id);
 
     size += snprintf(buf + size, len - size, " ");
     size += vsnprintf(buf + size, len - size, fmt, ap);

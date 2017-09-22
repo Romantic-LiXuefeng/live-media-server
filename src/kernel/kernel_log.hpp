@@ -55,4 +55,10 @@ private:
 #define log_error(msg, ...) \
     kernel_log::instance()->error(__FILE__, __LINE__, __FUNCTION__, global_context->get_id(), msg, ##__VA_ARGS__)
 
+#define log_error_eagain(ret, dst, msg, ...) \
+    if (ret != SOCKET_EAGAIN) {\
+        ret = dst; \
+        kernel_log::instance()->error(__FILE__, __LINE__, __FUNCTION__, global_context->get_id(), msg, ##__VA_ARGS__); \
+    }
+
 #endif // KERNEL_LOG_HPP

@@ -1,23 +1,16 @@
 #ifndef HTTP_FLV_READER_HPP
 #define HTTP_FLV_READER_HPP
 
-#include "DTcpSocket.hpp"
-#include "rtmp_global.hpp"
+#include "kernel_global.hpp"
 #include "http_reader.hpp"
 
 class http_flv_reader
 {
 public:
-    http_flv_reader(DTcpSocket *socket);
+    http_flv_reader(http_reader *reader, AVHandler handler);
     ~http_flv_reader();
 
-    void set_chunked(bool chunked);
-
-    int process();
-
-    void set_av_handler(AVHandlerEvent handler);
-
-    bool eof();
+    int service();
 
 private:
     int read_flv_header();
@@ -25,14 +18,23 @@ private:
     int read_tag_body();
     int read_pre_tag_size();
 
+    void generate_msg(DSharedPtr<MemoryChunk> payload, CommonMessage &msg);
+
 private:
     http_reader *m_reader;
-    dint8 m_schedule;
-    CommonMessage *m_msg;
+    AVHandler m_av_handler;
 
-    AVHandlerEvent m_av_handler;
+    enum Schedule {
+        FlvHeader = 0,
+        TagHeader,
+        TagBody,
+        PrevousTagSize
+    };
+    dint8 m_type;
 
-    bool m_eof;
+    duint8 m_tag_type;
+    duint32 m_dts;
+    duint32 m_tag_len;
 };
 
 #endif // HTTP_FLV_READER_HPP

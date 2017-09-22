@@ -7,10 +7,6 @@
 #include <map>
 #include <vector>
 #include <time.h>
-#include <tr1/functional>
-
-typedef std::tr1::function<void (void)> EventTimerHandler;
-#define EVENT_TIMER_CALLBACK(str) std::tr1::bind(str, this)
 
 class DTimer;
 
@@ -21,7 +17,6 @@ public:
     virtual ~EventHanderBase() {}
 
 public:
-    virtual int GetDescriptor() = 0;
     virtual int onRead() = 0;
     virtual int onWrite() = 0;
 };
@@ -43,13 +38,19 @@ public:
     DEvent();
     virtual ~DEvent();
 
-    bool init();
+    void start();
     void close();
-    bool add(EventHanderBase *handler);
-    bool del(EventHanderBase *handler);
-    void remove(EventHanderBase *handler);
-    bool wait();
-    bool event_loop();
+
+    int GetDescriptor();
+
+    /**
+     * @brief add
+     * @param handler
+     * @param fd
+     * @return 成功返回true，失败返回false，如果失败，外部调用者需要调用del进行删除
+     */
+    bool add(EventHanderBase *handler, int fd);
+    bool del(EventHanderBase *handler, int fd);
 
     /**
      * @brief 将handler加入到超时队列中等待处理，单位是微妙
@@ -67,13 +68,15 @@ public:
 
 private:
     void onTimeOut();
-    void generateTime();
-
+    void generateMonotonicTime();
     void startTimer();
+
+    void wait();
+    void freeDelHandlers();
 
 private:
     int m_fd;
-    std::vector<EventHanderBase*> m_handlers;
+    std::vector<EventHanderBase*> m_del_handlers;
 
 private:
     DTimer *m_timer;
@@ -84,8 +87,8 @@ private:
             return lhs.second < rhs.second;
         }
     };
-    std::map<EventTimeOutBase*, dint64> m_read_map;
-    std::map<EventTimeOutBase*, dint64> m_write_map;
+    std::map<EventTimeOutBase*, dint64> m_read_timeout_handlers;
+    std::map<EventTimeOutBase*, dint64> m_write_timeout_handlers;
 
 private:
     struct timespec m_monotonic;

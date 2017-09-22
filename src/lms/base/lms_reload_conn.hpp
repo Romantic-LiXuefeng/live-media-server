@@ -11,7 +11,7 @@ public:
     lms_reload_conn(DEvent *event);
     ~lms_reload_conn();
 
-    int open();
+    bool open();
     void close();
     void write(duint64 value);
 
@@ -23,7 +23,6 @@ public:
     DEvent *getEvent();
 
 public:
-    virtual int GetDescriptor();
     virtual int onRead();
     virtual int onWrite();
 

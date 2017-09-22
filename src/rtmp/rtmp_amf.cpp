@@ -1,4 +1,5 @@
 #include "rtmp_amf.hpp"
+#include <string.h>
 
 AMF0Any *AMFObject::value(int index)
 {
@@ -149,7 +150,13 @@ bool AmfReadDouble(DStream &buffer, double &var)
 {
     Check_Marker(AMF0_NUMBER);
 
-    return buffer.read8Bytes(var);
+    double temp;
+    if(!buffer.read8Bytes(temp)) {
+         return false;
+    }
+    memcpy(&var, &temp, 8);
+
+    return true;
 }
 
 bool AmfReadBoolean(DStream &buffer, bool &var)
@@ -390,7 +397,12 @@ bool AmfWriteString(DStream &buffer, const DString &var)
 bool AmfWriteDouble(DStream &buffer, double value)
 {
     buffer.write1Bytes(AMF0_NUMBER);
-    buffer.write8Bytes(value);
+
+    double temp = 0x00;
+    memcpy(&temp, &value, 8);
+
+    buffer.write8Bytes(temp);
+
     return true;
 }
 

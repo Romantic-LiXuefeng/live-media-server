@@ -6,8 +6,8 @@
 #include <string.h>
 #include <errno.h>
 
-DTcpListener::DTcpListener()
-    : m_event(NULL)
+DTcpListener::DTcpListener(DEvent *event)
+    : m_event(event)
     , m_fd(-1)
 {
 
@@ -15,7 +15,7 @@ DTcpListener::DTcpListener()
 
 DTcpListener::~DTcpListener()
 {
-
+    close();
 }
 
 int DTcpListener::listen(const DString &ip, int port)
@@ -56,17 +56,9 @@ int DTcpListener::listen(const DString &ip, int port)
 void DTcpListener::close()
 {
     if (m_fd != -1) {
-        m_event->del(this);
-
         ::close(m_fd);
         m_fd = -1;
     }
-}
-
-void DTcpListener::addToEvent(DEvent *event)
-{
-    m_event = event;
-    m_event->add(this);
 }
 
 DEvent *DTcpListener::getEvent()
@@ -104,17 +96,15 @@ int DTcpListener::onWrite()
     return 0;
 }
 
-void DTcpListener::setNonblocking(int fd)
+void DTcpListener::process(int fd)
 {
     int op = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, op | O_NONBLOCK);
-}
 
-void DTcpListener::process(int fd)
-{
-    setNonblocking(fd);
-    EventHanderBase *ev = onNewConnection(fd);
-    m_event->add(ev);
+    EventHanderBase *handler = onNewConnection(fd);
+    if (!m_event->add(handler, fd)) {
+        m_event->del(handler, fd);
+    }
 }
 
 /**************************************************************/
@@ -129,19 +119,19 @@ DTcpServer::~DTcpServer()
     DFree(m_event);
 }
 
-bool DTcpServer::init()
+void DTcpServer::start()
 {
-    return m_event->init();
+    m_event->start();
 }
 
-bool DTcpServer::start()
+bool DTcpServer::addListener(DTcpListener *listener)
 {
-    return m_event->event_loop();
+   return m_event->add(listener, listener->GetDescriptor());
 }
 
-void DTcpServer::startListener(DTcpListener *listener)
+bool DTcpServer::delListener(DTcpListener *listener)
 {
-    listener->addToEvent(m_event);
+    return m_event->del(listener, listener->GetDescriptor());
 }
 
 DEvent *DTcpServer::getEvent()

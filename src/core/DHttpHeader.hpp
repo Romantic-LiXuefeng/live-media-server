@@ -13,7 +13,7 @@ public:
     void addValue(const DString &key, const DString &value);
 
     void setContentLength(int len);
-    void setContentType(const DString &type);
+    void setContentType(const DString &name);
     void setHost(const DString &host);
     void setServer(const DString &server);
     void setConnectionClose();
@@ -31,9 +31,11 @@ public:
      * @param err 200/302
      * @param info OK/Found
      */
-    DString getResponseString(int err, const DString &info);
+    DString getResponseString(int code);
 
     DString getContentType(const DString &fileType);
+
+    DString getStatusInfo(int code);
 
 private:
     DString generateDate();

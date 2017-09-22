@@ -13,6 +13,11 @@ void DElapsedTimer::start()
     m_started = true;
 }
 
+void DElapsedTimer::stop()
+{
+    m_started = false;
+}
+
 duint64 DElapsedTimer::restart()
 {
     duint64 lastElapsed = elapsed();

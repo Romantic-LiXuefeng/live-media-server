@@ -44,18 +44,18 @@ void lms_gop_cache::cache_audio_sh(CommonMessage *msg)
 void lms_gop_cache::cache(CommonMessage *_msg)
 {
     if (_msg->is_video()) {
-        if (kernel_codec::video_is_sequence_header(const_cast<char*>(_msg->payload->data), _msg->payload->length)) {
+        if (_msg->is_sequence_header()) {
             cache_video_sh(_msg);
         } else {
             add(_msg);
         }
     } else if (_msg->is_audio()) {
-        if (kernel_codec::audio_is_sequence_header(const_cast<char*>(_msg->payload->data), _msg->payload->length)) {
+        if (_msg->is_sequence_header()) {
             cache_audio_sh(_msg);
         } else {
             add(_msg);
         }
-    } else {
+    } else if (_msg->is_metadata()) {
         cache_metadata(_msg);
     }
 }
@@ -67,7 +67,7 @@ void lms_gop_cache::add(CommonMessage *_msg)
     dint64 dts = m_jitter->correct(msg);
     bool key_frame = false;
 
-    if (msg->is_video() && kernel_codec::video_is_keyframe(const_cast<char*>(msg->payload->data), msg->payload->length)) {
+    if (msg->is_video() && msg->is_keyframe()) {
         key_frame = true;
     }
 
@@ -83,7 +83,7 @@ void lms_gop_cache::add(CommonMessage *_msg)
                 }
             } else if (m_gop_count == 1) {
                 CommonMessage *temp = first.msg;
-                if (!temp->is_video() || !kernel_codec::video_is_keyframe(const_cast<char*>(temp->payload->data), temp->payload->length)) {
+                if (!temp->is_video() || !temp->is_keyframe()) {
                     DFree(temp);
                     msgs.pop_front();
 
@@ -152,7 +152,7 @@ void lms_gop_cache::dump(std::deque<CommonMessage*> &_msgs, dint64 length,
         g_msg = msgs.at(i);
         msg = g_msg.msg;
 
-        if (msg->is_video() && kernel_codec::video_is_keyframe(const_cast<char*>(msg->payload->data), msg->payload->length)) {
+        if (msg->is_video() && msg->is_keyframe()) {
             if (end_time - g_msg.correct_time >= length) {
                 pos = i;
                 break;
@@ -200,6 +200,22 @@ void lms_gop_cache::clear()
     DFree(audio_sh);
 
     m_first = true;
+
+    m_gop_count = 0;
+    m_begin = m_end = 0;
+
+    m_jitter->reset();
+    m_durations.clear();
+}
+
+CommonMessage *lms_gop_cache::video_sequence()
+{
+    return video_sh;
+}
+
+CommonMessage *lms_gop_cache::audio_sequence()
+{
+    return audio_sh;
 }
 
 void lms_gop_cache::clear_first_gop()
@@ -212,7 +228,7 @@ void lms_gop_cache::clear_first_gop()
         GopMessage temp = *it;
         msg = temp.msg;
 
-        if (num != 0 && msg->is_video() && kernel_codec::video_is_keyframe(const_cast<char*>(msg->payload->data), msg->payload->length)) {
+        if (num != 0 && msg->is_video() && msg->is_keyframe()) {
             break;
         }
 

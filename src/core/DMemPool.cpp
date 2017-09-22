@@ -1,14 +1,15 @@
 #include "DMemPool.hpp"
 #include "DGlobal.hpp"
+
 #include <algorithm>
 
 #define DEFAULT_BLOCK_SIZE   1048576   // 1024 * 1024
-#define MAX_MEMORY_SIZE      1048576   // 1024 * 1024
 
 MemoryChunk::MemoryChunk()
     : length(0)
     , data(NULL)
     , size(0)
+    , block(NULL)
 {
 
 }
@@ -18,11 +19,11 @@ MemoryChunk::~MemoryChunk()
     DMemPool::instance()->destroyMemory(this);
 }
 
-MemoryBlock::MemoryBlock()
+MemoryBlock::MemoryBlock(int size)
     : pos(0)
     , count(0)
 {
-    data = new char[DEFAULT_BLOCK_SIZE];
+    data = new char[size];
 }
 
 MemoryBlock::~MemoryBlock()
@@ -35,10 +36,10 @@ MemoryBlock::~MemoryBlock()
 DMemPool *DMemPool::m_instance = new DMemPool();
 
 DMemPool::DMemPool()
+    : m_enable(true)
+    , m_block_size(DEFAULT_BLOCK_SIZE)
 {
-    MemoryBlock *block = new MemoryBlock();
-    m_cur_count = m_total_count = 0;
-    m_pools[m_total_count] = block;
+
 }
 
 DMemPool::~DMemPool()
@@ -53,49 +54,44 @@ MemoryChunk *DMemPool::getMemory(int size)
     MemoryChunk *chunk = new MemoryChunk();
     chunk->size = size;
 
-    if (size > MAX_MEMORY_SIZE) {
+    if ((size > m_block_size) || !m_enable) {
         chunk->data = new char[size];
         return chunk;
     }
 
-    MemoryBlock *block = m_pools[m_cur_count];
+    std::multimap<int, MemoryBlock*>::iterator it;
+    it = m_pools.lower_bound(size);
 
-    if (block->pos + size <= DEFAULT_BLOCK_SIZE) {
+    if (it != m_pools.end()) {
+        MemoryBlock *block = (*it).second;
+
         chunk->data = block->data + block->pos;
-        chunk->number = m_cur_count;
+        chunk->block = block;
 
         block->pos += size;
         block->count++;
 
-        return chunk;
-    }
+        int rest = m_block_size - block->pos;
 
-    if (!m_idles.empty()) {
-        duint64 number = m_idles.front();
-        m_idles.pop_front();
+        m_pools.erase(it);
+        m_pools.insert(std::make_pair(rest, block));
 
-        block = m_pools[number];
-        block->pos += size;
-        block->count++;
-
-        chunk->data = block->data;
-        chunk->number = number;
-
-        m_cur_count = number;
+        m_keys[block] = rest;
 
         return chunk;
     }
 
-    block = new MemoryBlock();
+    MemoryBlock *block = new MemoryBlock(m_block_size);
+    chunk->data = block->data;
+    chunk->block = block;
+
     block->pos += size;
     block->count++;
 
-    m_total_count++;
-    m_cur_count = m_total_count;
-    m_pools[m_total_count] = block;
+    int rest = m_block_size - block->pos;
+    m_pools.insert(std::make_pair(rest, block));
 
-    chunk->data = block->data;
-    chunk->number = m_cur_count;
+    m_keys[block] = rest;
 
     return chunk;
 }
@@ -104,30 +100,39 @@ void DMemPool::destroyMemory(MemoryChunk *chunk)
 {
     DSpinLocker locker(&m_mutex);
 
-    if (chunk->size > MAX_MEMORY_SIZE) {
+    if ((chunk->size > m_block_size) || (chunk->block == NULL)) {
         DFree(chunk->data);
         return;
     }
 
-    MemoryBlock *block = m_pools[chunk->number];
-    block->count--;
+    int key = m_keys[chunk->block];
 
-    if (block->count == 0) {
-        block->pos = 0;
+    std::multimap<int, MemoryBlock*>::iterator itlow, itup;
 
-        if (chunk->number != m_cur_count) {
-            m_idles.push_back(chunk->number);
+    itlow = m_pools.lower_bound(key);
+    itup = m_pools.upper_bound(key);
 
-            if (m_idles.size() > 100) {
-                std::list<duint64>::iterator it;
-                for (it = m_idles.begin(); it != m_idles.end(); ++it) {
-                    DFree(m_pools[*it]);
-                    m_pools.erase(*it);
-                }
-                m_idles.clear();
+    while (itlow != itup) {
+        MemoryBlock *block = itlow->second;
+        if (block == chunk->block) {
+            block->count--;
+
+            if (block->count == 0) {
+                block->pos = 0;
+
+                m_keys[block] = m_block_size;
+
+                m_pools.erase(itlow);
+                m_pools.insert(std::make_pair(m_block_size, block));
             }
+
+            break;
         }
+
+        itlow++;
     }
+
+    reduce();
 }
 
 DMemPool *DMemPool::instance()
@@ -135,8 +140,47 @@ DMemPool *DMemPool::instance()
     return m_instance;
 }
 
+void DMemPool::setEnable(bool value)
+{
+    DSpinLocker locker(&m_mutex);
+
+    m_enable = value;
+
+    if (!m_enable) {
+        m_block_size = 0;
+    }
+}
+
 void DMemPool::print()
 {
     DSpinLocker locker(&m_mutex);
-    printf("pool_count=%d, idle_count=%d\n", m_pools.size(), m_idles.size());
+
+    printf("----> total=%d, idles=%d\n", m_pools.size(), m_pools.count(m_block_size));
+}
+
+void DMemPool::reduce()
+{
+    // 测试
+    if (m_pools.count(m_block_size) < 100) {
+        return;
+    }
+
+    std::multimap<int, MemoryBlock*>::iterator itlow, itup;
+
+    itlow = m_pools.lower_bound(m_block_size);
+    itup = m_pools.upper_bound(m_block_size);
+
+    while (itlow != itup) {
+        if (itlow->first == m_block_size) {
+            MemoryBlock *block = itlow->second;
+            m_pools.erase(itlow);
+            m_keys.erase(block);
+
+            DFree(block);
+
+            break;
+        }
+
+        itlow++;
+    }
 }

@@ -6,6 +6,7 @@
 #include "DSpinLock.hpp"
 
 #include <vector>
+#include <map>
 
 class lms_threads_server : public DThread
 {
@@ -25,13 +26,14 @@ private:
     void reload_http();
 
 private:
+    int start_rtmp(int port);
+    int start_http(int port);
+
+private:
     DTcpServer *m_server;
 
-    std::vector<DTcpListener*> m_rtmp_listeners;
-    std::vector<int> m_rtmp_ports;
-
-    std::vector<DTcpListener*> m_http_listeners;
-    std::vector<int> m_http_ports;
+    std::map<int, DTcpListener*> m_rtmps;
+    std::map<int, DTcpListener*> m_https;
 };
 
 class lms_server_manager

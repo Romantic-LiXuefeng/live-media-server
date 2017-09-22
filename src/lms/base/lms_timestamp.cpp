@@ -43,7 +43,7 @@ dint64 lms_timestamp::correct(CommonMessage *msg)
         timestamp = high_correct(msg);
         break;
     default:
-        timestamp = msg->header.timestamp;
+        timestamp = msg->dts;
         break;
     }
 
@@ -62,6 +62,29 @@ void lms_timestamp::set_correct_info(int v_delta, int a_delta)
     m_audio_delta = a_delta;
 }
 
+void lms_timestamp::reset()
+{
+    m_last_audio = 0;
+    m_last_video = 0;
+
+    m_video_delta = 0;
+    m_audio_delta = 0;
+
+    m_origin_video = 0;
+    m_origin_audio = 0;
+
+    m_set_info = false;
+
+    m_video_first = true;
+    m_audio_first = true;
+
+    m_simple_last_pkt = 0;
+    m_simple_last_correct = -1;
+
+    m_middle_last_pkt = 0;
+    m_middle_last_correct = -1;
+}
+
 dint64 lms_timestamp::high_correct(CommonMessage *msg)
 {
     dint64 timestamp = 0;
@@ -70,7 +93,7 @@ dint64 lms_timestamp::high_correct(CommonMessage *msg)
     dint64 ori_v_delta, ori_a_delta;
     bool ori_normal = false;
 
-    if (msg->is_video() && kernel_codec::video_is_sequence_header(msg->payload->data, msg->payload->length)) {
+    if (msg->is_video() && msg->is_sequence_header()) {
         if (m_video_first) {
             return 0;
         } else {
@@ -78,7 +101,7 @@ dint64 lms_timestamp::high_correct(CommonMessage *msg)
         }
     }
 
-    if (msg->is_audio() && kernel_codec::audio_is_sequence_header(msg->payload->data, msg->payload->length)) {
+    if (msg->is_audio() && msg->is_sequence_header()) {
         if (m_audio_first) {
             return 0;
         } else {
@@ -87,16 +110,16 @@ dint64 lms_timestamp::high_correct(CommonMessage *msg)
     }
 
     if (msg->is_video()) {
-        delta = msg->header.timestamp - m_last_video;
+        delta = msg->dts - m_last_video;
 
         if (!m_set_info) {
-            ori_v_delta = msg->header.timestamp - m_origin_video;
+            ori_v_delta = msg->dts - m_origin_video;
             if (ori_v_delta > 0 && ori_v_delta < END_THRESHOLD) {
                 m_video_delta = ori_v_delta;
                 ori_normal = true;
             }
         }
-        m_origin_video = msg->header.timestamp;
+        m_origin_video = msg->dts;
 
         if (delta < BEGIN_THRESHOLD || delta > END_THRESHOLD) {
             m_last_video += m_video_delta;
@@ -122,16 +145,16 @@ dint64 lms_timestamp::high_correct(CommonMessage *msg)
     }
 
     if (msg->is_audio()) {
-        delta = msg->header.timestamp - m_last_audio;
+        delta = msg->dts - m_last_audio;
 
         if (!m_set_info) {
-            ori_a_delta = msg->header.timestamp - m_origin_audio;
+            ori_a_delta = msg->dts - m_origin_audio;
             if (ori_a_delta > 0 && ori_a_delta < END_THRESHOLD) {
                 m_audio_delta = ori_a_delta;
                 ori_normal = true;
             }
         }
-        m_origin_audio = msg->header.timestamp;
+        m_origin_audio = msg->dts;
 
         if (delta < BEGIN_THRESHOLD || delta > END_THRESHOLD) {
             m_last_audio += m_audio_delta;
@@ -161,11 +184,9 @@ dint64 lms_timestamp::high_correct(CommonMessage *msg)
 
 dint64 lms_timestamp::middle_correct(CommonMessage *msg)
 {
-    dint64 timestamp = DMax(msg->header.timestamp, 0);
+    dint64 timestamp = DMax(msg->dts, 0);
 
-    if ((msg->is_video() && kernel_codec::video_is_sequence_header(msg->payload->data, msg->payload->length))
-        || (msg->is_audio() && kernel_codec::audio_is_sequence_header(msg->payload->data, msg->payload->length)))
-    {
+    if (msg->is_sequence_header()) {
         if (m_middle_last_correct == -1) {
             return 0;
         } else {
@@ -194,11 +215,9 @@ dint64 lms_timestamp::middle_correct(CommonMessage *msg)
 
 dint64 lms_timestamp::simple_correct(CommonMessage *msg)
 {
-    dint64 timestamp = DMax(msg->header.timestamp, 0);
+    dint64 timestamp = DMax(msg->dts, 0);
 
-    if ((msg->is_video() && kernel_codec::video_is_sequence_header(msg->payload->data, msg->payload->length))
-        || (msg->is_audio() && kernel_codec::audio_is_sequence_header(msg->payload->data, msg->payload->length)))
-    {
+    if (msg->is_sequence_header()) {
         m_simple_last_pkt = timestamp;
         return timestamp;
     }

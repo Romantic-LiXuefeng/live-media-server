@@ -2,8 +2,7 @@
 #define LMS_EVENT_CONN_HPP
 
 #include "DEvent.hpp"
-#include "rtmp_global.hpp"
-#include "lms_gop_cache.hpp"
+#include "kernel_global.hpp"
 #include "lms_conn_base.hpp"
 #include "DSpinLock.hpp"
 #include <map>
@@ -16,9 +15,9 @@ class lms_event_conn : public EventHanderBase
 {
 public:
     lms_event_conn(DEvent *event);
-    ~lms_event_conn();
+    virtual ~lms_event_conn();
 
-    int open();
+    bool open();
     void close();
     void write(duint64 value);
 
@@ -30,12 +29,8 @@ public:
     bool empty();
 
 public:
-    virtual int GetDescriptor();
     virtual int onRead();
     virtual int onWrite();
-
-public:
-    lms_gop_cache *gop_cache;
 
 private:
     int m_fd;

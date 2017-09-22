@@ -21,14 +21,13 @@ public:
     DHostInfo(DEvent *event);
     ~DHostInfo();
 
-    void lookupHost(const DString &host);
+    bool lookupHost(const DString &host);
     void close();
 
     void setFinishedHandler(HostHandler handler);
     void setErrorHandler(HostHandler handler);
 
 public:
-    virtual int GetDescriptor();
     virtual int onRead();
     virtual int onWrite();
 

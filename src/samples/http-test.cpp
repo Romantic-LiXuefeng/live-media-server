@@ -11,7 +11,7 @@ void request_header()
     h.setDate();
     h.setHost("www.test.com");
     h.setConnectionKeepAlive();
-    h.setContentType("text/html");
+    h.setContentType("txt");
 
     cout << h.getRequestString("GET", "/live/123") << endl;
 }
@@ -24,9 +24,9 @@ void response_header()
     h.setServer("bfe/1.0.8.18");
     h.setContentLength(100);
     h.setConnectionKeepAlive();
-    h.setContentType("text/html");
+    h.setContentType("txt");
 
-    cout << h.getResponseString(200, "OK") << endl;
+    cout << h.getResponseString(200) << endl;
 }
 
 int main()
