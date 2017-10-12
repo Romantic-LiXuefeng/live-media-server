@@ -425,7 +425,7 @@ DString lms_hls_segment::generate_ts_filename()
 
     struct tm *tm;
     if ((tm = localtime(&tv.tv_sec)) == NULL) {
-        return DString::number(m_ts_number) + ".ts";
+        return DString::number(m_ts_number++) + ".ts";
     }
 
     DString yyyy = DString().sprintf("%d",   1900 + tm->tm_year);
@@ -513,6 +513,14 @@ int lms_hls_segment::rename_ts()
     DFree(m_temp_file);
 
     m_ts_filename = m_root + "/" + m_req->vhost + "/" + m_req->app + "/" + m_req->stream + "/" + generate_ts_filename();
+
+    DString temp_dir = DFile::filePath(m_ts_filename);
+    if (!create_dir(temp_dir)) {
+        ret = ERROR_CREATE_DIR;
+        log_error("create dir %s failed. ret=%d", temp_dir.c_str(), ret);
+        return ret;
+    }
+
 
     if (::rename(m_temp_filename.c_str(), m_ts_filename.c_str()) < 0) {
         ret = ERROR_RENAME_FILE;

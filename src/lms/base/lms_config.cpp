@@ -11,6 +11,198 @@
 
 /*****************************************************************************/
 
+lms_flv_dvr_config_struct::lms_flv_dvr_config_struct()
+    : exist_enable(false)
+    , enable(false)
+    , exist_root(false)
+    , exist_path(false)
+    , exist_time_jitter(false)
+    , exist_jitter_type(false)
+    , exist_time_expired(false)
+    , exist_fragment(false)
+{
+
+}
+
+lms_flv_dvr_config_struct::~lms_flv_dvr_config_struct()
+{
+
+}
+
+void lms_flv_dvr_config_struct::load_config(lms_config_directive *directive)
+{
+    if (true) {
+        lms_config_directive *conf = directive->get("enable");
+        if (conf && !conf->arg(0).isEmpty()) {
+            if (conf->arg(0) == "on") {
+                enable = true;
+            }
+
+            exist_enable = true;
+
+            log_trace("enable=%s", conf->arg(0).c_str());
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("root");
+        if (conf && !conf->arg(0).isEmpty()) {
+            root = conf->arg(0);
+
+            exist_root = true;
+
+            log_trace("root=%s", conf->arg(0).c_str());
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("path");
+        if (conf && !conf->arg(0).isEmpty()) {
+            path = conf->arg(0);
+
+            exist_path = true;
+
+            log_trace("path=%s", conf->arg(0).c_str());
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("time_jitter");
+        if (conf && !conf->arg(0).isEmpty()) {
+            if (conf->arg(0) == "on") {
+                time_jitter = true;
+            }
+
+            exist_time_jitter = true;
+
+            log_trace("time_jitter=%s", conf->arg(0).c_str());
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("time_jitter_type");
+
+        if (conf && !conf->arg(0).isEmpty()) {
+            DString type = conf->arg(0);
+
+            if (type == "simple") {
+                time_jitter_type = LmsTimeStamp::simple;
+            } else if (type == "middle") {
+                time_jitter_type = LmsTimeStamp::middle;
+            } else if (type == "high") {
+                time_jitter_type = LmsTimeStamp::high;
+            }
+
+            exist_jitter_type = true;
+
+            log_trace("time_jitter_type=%s", conf->arg(0).c_str());
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("fragment");
+
+        if (conf && !conf->arg(0).isEmpty()) {
+            fragment = conf->arg(0).toDouble();
+
+            exist_fragment = true;
+
+            log_trace("fragment=%s", conf->arg(0).c_str());
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("time_expired");
+
+        if (conf && !conf->arg(0).isEmpty()) {
+            time_expired = conf->arg(0).toInt();
+
+            exist_time_expired = true;
+
+            log_trace("time_expired=%s", conf->arg(0).c_str());
+        }
+    }
+}
+
+lms_flv_dvr_config_struct *lms_flv_dvr_config_struct::copy()
+{
+    lms_flv_dvr_config_struct *ret = new lms_flv_dvr_config_struct();
+    ret->exist_enable = exist_enable;
+    ret->enable = enable;
+    ret->exist_fragment = exist_fragment;
+    ret->fragment = fragment;
+    ret->exist_path = exist_path;
+    ret->path = path;
+    ret->exist_time_jitter = exist_time_jitter;
+    ret->time_jitter = time_jitter;
+    ret->exist_jitter_type = exist_jitter_type;
+    ret->time_jitter_type = time_jitter_type;
+    ret->exist_root = exist_root;
+    ret->root = root;
+    ret->exist_time_expired = exist_time_expired;
+    ret->time_expired = time_expired;
+
+    return ret;
+}
+
+bool lms_flv_dvr_config_struct::get_enable(bool &value)
+{
+    if (exist_enable) {
+        value = enable;
+    }
+    return exist_enable;
+}
+
+bool lms_flv_dvr_config_struct::get_fragment(double &value)
+{
+    if (exist_fragment) {
+        value = fragment;
+    }
+    return exist_fragment;
+}
+
+bool lms_flv_dvr_config_struct::get_path(DString &value)
+{
+    if (exist_path) {
+        value = path;
+    }
+    return exist_path;
+}
+
+bool lms_flv_dvr_config_struct::get_time_jitter(bool &value)
+{
+    if (exist_time_jitter) {
+        value = time_jitter;
+    }
+    return exist_time_jitter;
+}
+
+bool lms_flv_dvr_config_struct::get_time_jitter_type(int &value)
+{
+    if (exist_jitter_type) {
+        value = time_jitter_type;
+    }
+    return exist_jitter_type;
+}
+
+bool lms_flv_dvr_config_struct::get_root(DString &value)
+{
+    if (exist_root) {
+        value = root;
+    }
+    return exist_root;
+}
+
+bool lms_flv_dvr_config_struct::get_time_expired(int &value)
+{
+    if (exist_time_expired) {
+        value = time_expired;
+    }
+    return exist_time_expired;
+}
+
+/*****************************************************************************/
+
 lms_hls_config_struct::lms_hls_config_struct()
     : exist_enable(false)
     , enable(false)
@@ -160,6 +352,18 @@ void lms_hls_config_struct::load_config(lms_config_directive *directive)
             log_trace("root=%s", conf->arg(0).c_str());
         }
     }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("time_expired");
+
+        if (conf && !conf->arg(0).isEmpty()) {
+            time_expired = conf->arg(0).toInt();
+
+            exist_time_expired = true;
+
+            log_trace("time_expired=%s", conf->arg(0).c_str());
+        }
+    }
 }
 
 lms_hls_config_struct *lms_hls_config_struct::copy()
@@ -185,6 +389,8 @@ lms_hls_config_struct *lms_hls_config_struct::copy()
     ret->time_jitter_type = time_jitter_type;
     ret->exist_root = exist_root;
     ret->root = root;
+    ret->exist_time_expired = exist_time_expired;
+    ret->time_expired = time_expired;
 
     return ret;
 }
@@ -1428,6 +1634,7 @@ lms_location_config_struct::lms_location_config_struct()
     , refer(NULL)
     , hook(NULL)
     , hls(NULL)
+    , flv(NULL)
 {
 
 }
@@ -1441,6 +1648,7 @@ lms_location_config_struct::~lms_location_config_struct()
     DFree(refer);
     DFree(hook);
     DFree(hls);
+    DFree(flv);
 }
 
 void lms_location_config_struct::load_config(lms_config_directive *directive)
@@ -1509,6 +1717,14 @@ void lms_location_config_struct::load_config(lms_config_directive *directive)
             hls->load_config(conf);
         }
     }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("flv");
+        if (conf) {
+            flv = new lms_flv_dvr_config_struct();
+            flv->load_config(conf);
+        }
+    }
 }
 
 lms_location_config_struct *lms_location_config_struct::copy()
@@ -1537,6 +1753,9 @@ lms_location_config_struct *lms_location_config_struct::copy()
     }
     if (hls) {
         location->hls = hls->copy();
+    }
+    if (flv) {
+        location->flv = flv->copy();
     }
 
     return location;
@@ -2073,6 +2292,83 @@ bool lms_location_config_struct::get_hls_time_expired(int &value)
     return false;
 }
 
+bool lms_location_config_struct::get_flv_enable(bool &value)
+{
+    if (flv) {
+        if (flv->get_enable(value)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_flv_fragment(double &value)
+{
+    if (flv) {
+        if (flv->get_fragment(value)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_flv_path(DString &value)
+{
+    if (flv) {
+        if (flv->get_path(value)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_flv_time_jitter(bool &value)
+{
+    if (flv) {
+        if (flv->get_time_jitter(value)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_flv_time_jitter_type(int &value)
+{
+    if (flv) {
+        if (flv->get_time_jitter_type(value)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_flv_root(DString &value)
+{
+    if (flv) {
+        if (flv->get_root(value)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool lms_location_config_struct::get_flv_time_expired(int &value)
+{
+    if (flv) {
+        if (flv->get_time_expired(value)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /*****************************************************************************/
 
 lms_server_config_struct::lms_server_config_struct()
@@ -2083,6 +2379,7 @@ lms_server_config_struct::lms_server_config_struct()
     , refer(NULL)
     , hook(NULL)
     , hls(NULL)
+    , flv(NULL)
 {
 
 }
@@ -2096,6 +2393,7 @@ lms_server_config_struct::~lms_server_config_struct()
     DFree(refer);
     DFree(hook);
     DFree(hls);
+    DFree(flv);
 
     for (int i = 0; i < (int)locations.size(); ++i) {
         DFree(locations.at(i));
@@ -2179,6 +2477,15 @@ void lms_server_config_struct::load_config(lms_config_directive *directive)
     }
 
     if (true) {
+        lms_config_directive *conf = directive->get("flv");
+
+        if (conf) {
+            flv = new lms_flv_dvr_config_struct();
+            flv->load_config(conf);
+        }
+    }
+
+    if (true) {
         std::vector<lms_config_directive*>::iterator it;
 
         for (it = directive->directives.begin(); it != directive->directives.end(); ++it) {
@@ -2221,6 +2528,9 @@ lms_server_config_struct *lms_server_config_struct::copy()
     }
     if (hls) {
         server->hls = hls->copy();
+    }
+    if (flv) {
+        server->flv = flv->copy();
     }
 
     for (int i = 0; i < (int)locations.size(); ++i) {
@@ -3419,6 +3729,160 @@ int lms_server_config_struct::get_hls_time_expired(kernel_request *req)
 
     if (hls) {
         hls->get_time_expired(ret);
+    }
+
+    return ret;
+}
+
+bool lms_server_config_struct::get_flv_enable(kernel_request *req)
+{
+    bool ret = false;
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_flv_enable(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (flv) {
+        flv->get_enable(ret);
+    }
+
+    return ret;
+}
+
+double lms_server_config_struct::get_flv_fragment(kernel_request *req)
+{
+    double ret = 3;
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_flv_fragment(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (flv) {
+        flv->get_fragment(ret);
+    }
+
+    return ret;
+}
+
+DString lms_server_config_struct::get_flv_path(kernel_request *req)
+{
+    DString ret = "[yyyy]/[MM]/[dd]/[hh]/[mm]/[ss].flv";
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_flv_path(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (flv) {
+        flv->get_path(ret);
+    }
+
+    return ret;
+}
+
+bool lms_server_config_struct::get_flv_time_jitter(kernel_request *req)
+{
+    bool ret = false;
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_flv_time_jitter(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (flv) {
+        flv->get_time_jitter(ret);
+    }
+
+    return ret;
+}
+
+int lms_server_config_struct::get_flv_time_jitter_type(kernel_request *req)
+{
+    int ret = LmsTimeStamp::middle;
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_flv_time_jitter_type(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (flv) {
+        flv->get_time_jitter_type(ret);
+    }
+
+    return ret;
+}
+
+DString lms_server_config_struct::get_flv_root(kernel_request *req)
+{
+    DString ret = "html";
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_flv_root(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (flv) {
+        flv->get_root(ret);
+    }
+
+    return ret;
+}
+
+int lms_server_config_struct::get_flv_time_expired(kernel_request *req)
+{
+    int ret = 120;
+
+    for (int i = 0; i < (int)locations.size(); ++i) {
+        lms_location_config_struct *location = locations.at(i);
+
+        if (location->get_matched(req)) {
+            if (location->get_flv_time_expired(ret)) {
+                return ret;
+            }
+            break;
+        }
+    }
+
+    if (flv) {
+        flv->get_time_expired(ret);
     }
 
     return ret;

@@ -20,6 +20,50 @@ public:
     virtual lms_config_base *copy() = 0;
 };
 
+class lms_flv_dvr_config_struct : public lms_config_base
+{
+public:
+    lms_flv_dvr_config_struct();
+    ~lms_flv_dvr_config_struct();
+
+    virtual void load_config(lms_config_directive *directive);
+    virtual lms_flv_dvr_config_struct *copy();
+
+public:
+    bool get_enable(bool &value);
+    bool get_fragment(double &value);
+    bool get_path(DString &value);
+    bool get_time_jitter(bool &value);
+    bool get_time_jitter_type(int &value);
+    bool get_root(DString &value);
+    bool get_time_expired(int &value);
+
+public:
+    bool exist_enable;
+    // 默认false
+    bool enable;
+
+    bool exist_root;
+    DString root;
+
+    bool exist_path;
+    DString path;
+
+    bool exist_time_jitter;
+    bool time_jitter;
+
+    bool exist_jitter_type;
+    // 默认middle
+    int time_jitter_type;
+
+    bool exist_time_expired;
+    int time_expired;
+
+    bool exist_fragment;
+    double fragment;
+
+};
+
 class lms_hls_config_struct : public lms_config_base
 {
 public:
@@ -466,6 +510,14 @@ public:
     bool get_hls_root(DString &value);
     bool get_hls_time_expired(int &value);
 
+    bool get_flv_enable(bool &value);
+    bool get_flv_fragment(double &value);
+    bool get_flv_path(DString &value);
+    bool get_flv_time_jitter(bool &value);
+    bool get_flv_time_jitter_type(int &value);
+    bool get_flv_root(DString &value);
+    bool get_flv_time_expired(int &value);
+
 public:
     DString type;
     DString pattern;
@@ -477,6 +529,7 @@ public:
     lms_refer_config_struct *refer;
     lms_hook_config_struct *hook;
     lms_hls_config_struct *hls;
+    lms_flv_dvr_config_struct *flv;
 };
 
 /**
@@ -583,6 +636,14 @@ public:
     DString get_hls_root(kernel_request *req);
     int get_hls_time_expired(kernel_request *req);
 
+    bool get_flv_enable(kernel_request *req);
+    double get_flv_fragment(kernel_request *req);
+    DString get_flv_path(kernel_request *req);
+    bool get_flv_time_jitter(kernel_request *req);
+    int get_flv_time_jitter_type(kernel_request *req);
+    DString get_flv_root(kernel_request *req);
+    int get_flv_time_expired(kernel_request *req);
+
 public:
     std::vector<DString> server_name;
 
@@ -593,6 +654,7 @@ public:
     lms_refer_config_struct *refer;
     lms_hook_config_struct *hook;
     lms_hls_config_struct *hls;
+    lms_flv_dvr_config_struct *flv;
 
     std::vector<lms_location_config_struct*> locations;
 };

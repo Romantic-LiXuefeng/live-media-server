@@ -4,7 +4,7 @@
 #include <stdlib.h>
 
 /**
- * 使用原子操作实现的线程安全的sharedptr，摘自boost
+ * 使用原子操作实现的线程安全的sharedptr
  */
 
 template<typename T>

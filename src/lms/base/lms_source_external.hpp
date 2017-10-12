@@ -7,7 +7,7 @@ class lms_source_external
 {
 public:
     lms_source_external(kernel_request *req);
-    ~lms_source_external();
+    virtual ~lms_source_external();
 
     void start();
     void stop();
@@ -19,11 +19,12 @@ public:
 
 private:
     void init_hls();
+    void init_flv();
 
 private:
     kernel_request *m_req;
     lms_source_abstract_product *m_hls;
-
+    lms_source_abstract_product *m_flv;
 };
 
 #endif // LMS_SOURCE_EXTERNAL_HPP
