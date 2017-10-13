@@ -155,7 +155,7 @@ void DMemPool::print()
 {
     DSpinLocker locker(&m_mutex);
 
-    printf("----> total=%d, idles=%d\n", m_pools.size(), m_pools.count(m_block_size));
+    printf("DMemPool: total=%d, idles=%d\n", m_pools.size(), m_pools.count(m_block_size));
 }
 
 void DMemPool::reduce()

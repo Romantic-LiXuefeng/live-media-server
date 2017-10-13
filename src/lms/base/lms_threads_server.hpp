@@ -36,24 +36,4 @@ private:
     std::map<int, DTcpListener*> m_https;
 };
 
-class lms_server_manager
-{
-public:
-    lms_server_manager();
-    ~lms_server_manager();
-
-    static lms_server_manager *instance();
-
-    void addServer(DTcpServer *server);
-    std::vector<DTcpServer*> getServer();
-
-private:
-    static lms_server_manager *m_instance;
-
-private:
-    std::vector<DTcpServer*> m_servers;
-    DSpinLock m_mutex;
-
-};
-
 #endif // LMS_THREADS_SERVER_HPP

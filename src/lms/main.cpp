@@ -80,8 +80,9 @@ void init_log()
 
 void onTimer()
 {
+#if 0
     DMemPool::instance()->print();
-
+#endif
     lms_source_manager::instance()->reset();
 }
 

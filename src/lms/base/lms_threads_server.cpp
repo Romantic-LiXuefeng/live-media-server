@@ -27,8 +27,6 @@ void lms_threads_server::reload()
 
 void lms_threads_server::run()
 {
-    lms_server_manager::instance()->addServer(m_server);
-
     start_rtmp();
     start_http();
 
@@ -162,34 +160,4 @@ int lms_threads_server::start_http(int port)
 
     return ret;
 
-}
-
-/*********************************************************************************/
-
-lms_server_manager *lms_server_manager::m_instance = new lms_server_manager;
-
-lms_server_manager::lms_server_manager()
-{
-
-}
-
-lms_server_manager::~lms_server_manager()
-{
-
-}
-
-lms_server_manager *lms_server_manager::instance()
-{
-    return m_instance;
-}
-
-void lms_server_manager::addServer(DTcpServer *server)
-{
-    DSpinLocker locker(&m_mutex);
-    m_servers.push_back(server);
-}
-
-std::vector<DTcpServer *> lms_server_manager::getServer()
-{
-    return m_servers;
 }
