@@ -6,10 +6,11 @@
 #include "DHttpParser.hpp"
 #include "lms_source.hpp"
 #include "codec.h"
+#include "lms_http_process_base.hpp"
 
 class lms_http_server_conn;
 
-class lms_http_ts_live
+class lms_http_ts_live : public lms_http_process_base
 {
 public:
     lms_http_ts_live(lms_http_server_conn *conn);
@@ -23,6 +24,8 @@ public:
     int process(CommonMessage *msg);
     bool reload();
     void release();
+
+    kernel_request *request() { return m_req; }
 
 private:
     void get_config_value();

@@ -3890,7 +3890,82 @@ int lms_server_config_struct::get_flv_time_expired(kernel_request *req)
 
 /*****************************************************************************/
 
+lms_access_log_struct::lms_access_log_struct()
+    : enable(false)
+    , exist_type(false)
+    , exist_path(false)
+{
+
+}
+
+lms_access_log_struct::~lms_access_log_struct()
+{
+
+}
+
+void lms_access_log_struct::load_config(lms_config_directive *directive)
+{
+    if (true) {
+        lms_config_directive *conf = directive->get("enable");
+        if (conf && !conf->arg(0).isEmpty()) {
+            if (conf->arg(0) == "on") {
+                enable = true;
+            }
+
+            log_trace("enable=%s", conf->arg(0).c_str());
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("type");
+        if (conf && !conf->arg(0).isEmpty()) {
+            type = conf->arg(0);
+
+            exist_type = true;
+
+            log_trace("access_type=%s", conf->arg(0).c_str());
+        }
+    }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("path");
+        if (conf && !conf->arg(0).isEmpty()) {
+            path = conf->arg(0);
+
+            exist_path = true;
+
+            log_trace("access_path=%s", conf->arg(0).c_str());
+        }
+    }
+}
+
+bool lms_access_log_struct::get_enable()
+{
+    return enable;
+}
+
+DString lms_access_log_struct::get_type()
+{
+    if (exist_type) {
+        return type;
+    }
+
+    return "all";
+}
+
+DString lms_access_log_struct::get_path()
+{
+    if (exist_path) {
+        return path;
+    }
+
+    return DEFAULT_ACCESS_LOGPATH;
+}
+
+/*****************************************************************************/
+
 lms_config_struct::lms_config_struct()
+    : access_log(NULL)
 {
 
 }
@@ -3900,6 +3975,8 @@ lms_config_struct::~lms_config_struct()
     for (int i = 0; i < (int)servers.size(); ++i) {
         DFree(servers.at(i));
     }
+
+    DFree(access_log);
 }
 
 void lms_config_struct::load_global_config(lms_config_directive *directive)
@@ -4060,6 +4137,15 @@ void lms_config_struct::load_global_config(lms_config_directive *directive)
             }
         }
     }
+
+    if (true) {
+        lms_config_directive *conf = directive->get("access_log");
+
+        if (conf) {
+            access_log = new lms_access_log_struct();
+            access_log->load_config(conf);
+        }
+    }
 }
 
 void lms_config_struct::load_server_config(lms_config_directive *directive)
@@ -4216,4 +4302,19 @@ lms_server_config_struct *lms_config::get_server(kernel_request *req)
     }
 
     return NULL;
+}
+
+bool lms_config::get_access_log_enable()
+{
+    return m_config->access_log->get_enable();
+}
+
+DString lms_config::get_access_log_type()
+{
+    return m_config->access_log->get_type();
+}
+
+DString lms_config::get_access_log_path()
+{
+    return m_config->access_log->get_path();
 }

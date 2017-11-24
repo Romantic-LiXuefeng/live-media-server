@@ -6,6 +6,9 @@
 #include "lms_verify_hooks.hpp"
 #include "lms_verify_refer.hpp"
 #include "lms_source.hpp"
+#include "DDateTime.hpp"
+#include "DMd5.hpp"
+#include "lms_rtmp_utility.hpp"
 
 lms_rtmp_server_conn::lms_rtmp_server_conn(DThread *parent, DEvent *ev, int fd)
     : lms_conn_base(parent, ev, fd)
@@ -32,6 +35,8 @@ lms_rtmp_server_conn::lms_rtmp_server_conn(DThread *parent, DEvent *ev, int fd)
     m_rtmp->set_play_start(Rtmp_Verify_Handler_Callback(&lms_rtmp_server_conn::onPlayStart));
 
     m_client_ip = get_peer_ip(m_fd);
+    m_begin_time = DDateTime::currentDate().toString("yyyy-MM-dd hh:mm:ss.ms");
+    m_md5 = DMd5::md5(m_client_ip + m_begin_time + DString::number(fd));
 }
 
 lms_rtmp_server_conn::~lms_rtmp_server_conn()
@@ -186,6 +191,8 @@ void lms_rtmp_server_conn::release()
         m_source = NULL;
     }
 
+    rtmp_access_log_end(m_req, m_client_ip, m_md5);
+
     global_context->delete_id(m_fd);
 
     close();
@@ -219,6 +226,8 @@ void lms_rtmp_server_conn::onPlay(kernel_request *req)
     m_req = req;
     get_config_value();
 
+    rtmp_access_log_begin(req, m_begin_time, m_client_ip, m_md5, "play");
+
     verify_play(m_req);
 }
 
@@ -234,6 +243,8 @@ void lms_rtmp_server_conn::onPublish(kernel_request *req)
 
     m_req = req;
     get_config_value();
+
+    rtmp_access_log_begin(req, m_begin_time, m_client_ip, m_md5, "publish");
 
     verify_publish(m_req);
 }

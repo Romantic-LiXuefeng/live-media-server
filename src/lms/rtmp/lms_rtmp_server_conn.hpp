@@ -91,6 +91,12 @@ private:
     //控制hook和release
     bool m_hooking;
     bool m_need_release;
+
+private:
+    // 客户端连接上来的时间
+    DString m_begin_time;
+    DString m_md5;
+
 };
 
 #endif // LMS_RTMP_SERVER_CONN_HPP

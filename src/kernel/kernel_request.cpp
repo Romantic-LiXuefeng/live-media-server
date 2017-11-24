@@ -65,6 +65,7 @@ void kernel_request::set_stream(const DString &value)
     if ((pos = url.find("?")) != std::string::npos) {
         stream = url.substr(0, pos);
         url = url.substr(stream.length() + 1);
+        oriParam = url;
     }
 
     DStringList args = url.split("&");
@@ -96,6 +97,7 @@ void kernel_request::set_http_url(const DString &_host, const DString &url, cons
     if ((pos = _url.find("?")) != std::string::npos) {
         location = _url.substr(0, pos);
         _url = _url.substr(location.length() + 1);
+        oriParam = _url;
     }
 
     DStringList args = _url.split("&");

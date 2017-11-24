@@ -10,6 +10,7 @@
 #include "lms_http_send_file.hpp"
 #include "lms_http_ts_live.hpp"
 #include "lms_http_ts_recv.hpp"
+#include "lms_http_process_base.hpp"
 
 class lms_source;
 
@@ -42,23 +43,7 @@ private:
 
     int do_process(DHttpParser *parser);
 
-    int init_flv_live(DHttpParser *parser);
-    int init_flv_recv(DHttpParser *parser);
-
-    int init_send_file(DHttpParser *parser);
-
-    int init_ts_live(DHttpParser *parser);
-    int init_ts_recv(DHttpParser *parser);
-
     void response_http_header(int code);
-
-    int start_process();
-
-    int start_flv_live();
-    int start_flv_recv();
-    int start_send_file();
-    int start_ts_live();
-    int start_ts_recv();
 
     void clear_http_body();
 
@@ -67,11 +52,15 @@ private:
 
     dint8 m_type;
 
-    lms_http_flv_live *m_flv_live;
-    lms_http_flv_recv *m_flv_recv;
-    lms_http_send_file *m_send_file;
-    lms_http_ts_live *m_ts_live;
-    lms_http_ts_recv *m_ts_recv;
+    lms_http_process_base *m_process;
+
+    // 客户端连接上来的时间
+    DString m_begin_time;
+    // 客户端ip
+    DString m_client_ip;
+    DString m_md5;
+
+    int m_code;
 };
 
 #endif // LMS_HTTP_SERVER_CONN_HPP

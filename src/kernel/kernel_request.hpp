@@ -36,6 +36,7 @@ public:
     DString host;
     DString port;
     std::map<DString,DString> params;
+    DString oriParam;
 
     DString tcUrl;
     DString pageUrl;

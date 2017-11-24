@@ -8,6 +8,7 @@
 #include "lms_config.hpp"
 #include "lms_source.hpp"
 #include "lms_global.hpp"
+#include "lms_access_log.hpp"
 
 #include "kernel_log.hpp"
 #include "DMemPool.hpp"
@@ -74,8 +75,18 @@ void init_log()
     if (lms_config::instance()->get_log_to_file()) {
         kernel_log::instance()->setLog2File(true);
     }
+}
 
-    kernel_log::instance()->setEnableCache(false);
+void init_access_log()
+{
+    bool enable = lms_config::instance()->get_access_log_enable();
+    lms_access_log::instance()->setEnable(enable);
+
+    DString path = lms_config::instance()->get_access_log_path();
+    lms_access_log::instance()->setPath(path);
+
+    DString type = lms_config::instance()->get_access_log_type();
+    lms_access_log::instance()->setType(type);
 }
 
 void onTimer()
@@ -107,11 +118,21 @@ void onReload()
 
     init_log();
 
+    init_access_log();
+
     lms_source_manager::instance()->reload();
 
     for (int i = 0; i < (int)servers.size(); ++i) {
         servers.at(i)->reload();
     }
+}
+
+void onReopen()
+{
+    log_trace("reopen log");
+    kernel_log::instance()->reopen();
+
+    lms_access_log::instance()->reopen();
 }
 
 void start_server()
@@ -145,6 +166,14 @@ void start_signal(DEvent *event)
     reload_sig->setHandler(onReload);
     if (!reload_sig->open(SIGHUP)) {
         log_error("signal SIGHUP open failed");
+        ::exit(-1);
+    }
+
+    // process signal(SIGUSR1) for reopen log
+    DSignal *reopen_sig = new DSignal(event);
+    reopen_sig->setHandler(onReopen);
+    if (!reopen_sig->open(SIGUSR1)) {
+        log_error("signal SIGUSR1 open failed");
         ::exit(-1);
     }
 }
@@ -190,6 +219,8 @@ int main(int argc, char *argv[])
 
     // 设置日志属性
     init_log();
+
+    init_access_log();
 
     // 初始化epoll
     DEvent *event = new DEvent;

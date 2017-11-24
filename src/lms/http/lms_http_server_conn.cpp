@@ -5,31 +5,30 @@
 #include "lms_http_utility.hpp"
 #include "DHttpHeader.hpp"
 #include "lms_global.hpp"
+#include "DDateTime.hpp"
+#include "DMd5.hpp"
 
 lms_http_server_conn::lms_http_server_conn(DThread *parent, DEvent *ev, int fd)
     : lms_conn_base(parent, ev, fd)
     , m_type(HttpType::Default)
-    , m_flv_live(NULL)
-    , m_flv_recv(NULL)
-    , m_send_file(NULL)
-    , m_ts_live(NULL)
-    , m_ts_recv(NULL)
+    , m_process(NULL)
+    , m_code(200)
 {
     dint64 timeout = 10 * 1000 * 1000;
     setWriteTimeOut(timeout);
     setReadTimeOut(timeout);
 
     m_reader = new http_reader(this, true, HTTP_HEADER_CALLBACK(&lms_http_server_conn::onHttpParser));
+
+    m_begin_time = DDateTime::currentDate().toString("yyyy-MM-dd hh:mm:ss.ms");
+    m_client_ip = get_peer_ip(fd);
+    m_md5 = DMd5::md5(m_client_ip + m_begin_time + DString::number(fd));
 }
 
 lms_http_server_conn::~lms_http_server_conn()
 {
     DFree(m_reader);
-    DFree(m_flv_live);
-    DFree(m_flv_recv);
-    DFree(m_send_file);
-    DFree(m_ts_live);
-    DFree(m_ts_recv);
+    DFree(m_process);
 }
 
 http_reader *lms_http_server_conn::reader()
@@ -52,21 +51,11 @@ int lms_http_server_conn::onReadProcess()
 
     switch (m_type) {
     case HttpType::FlvRecv:
-        if (m_flv_recv) {
-            ret = m_flv_recv->service();
-        }
-        break;
     case HttpType::TsRecv:
-        if (m_ts_recv) {
-            ret = m_ts_recv->service();
-        }
+        ret = m_process->service();
         break;
     case HttpType::SendFile:
-        clear_http_body();
-        break;
     case HttpType::FlvLive:
-        clear_http_body();
-        break;
     case HttpType::TsLive:
         clear_http_body();
         break;
@@ -87,24 +76,19 @@ int lms_http_server_conn::onWriteProcess()
 
     switch (m_type) {
     case HttpType::FlvLive:
-        ret = m_flv_live->flush();
-        break;
-    case HttpType::FlvRecv:
-
+    case HttpType::TsLive:
+        ret = m_process->flush();
         break;
     case HttpType::SendFile:
-        if ((ret = m_send_file->flush()) != ERROR_SUCCESS) {
+        if ((ret = m_process->flush()) != ERROR_SUCCESS) {
             return ret;
         }
-        if (m_send_file->eof()) {
+        if (m_process->eof()) {
             release();
         }
         break;
-    case HttpType::TsLive:
-        ret = m_ts_live->flush();
-        break;
     case HttpType::TsRecv:
-
+    case HttpType::FlvRecv:
         break;
     default:
         break;
@@ -143,19 +127,12 @@ int lms_http_server_conn::Process(CommonMessage *msg)
 
     switch (m_type) {
     case HttpType::FlvLive:
-        ret = m_flv_live->process(msg);
+    case HttpType::TsLive:
+        ret = m_process->process(msg);
         break;
     case HttpType::FlvRecv:
-
-        break;
     case HttpType::SendFile:
-
-        break;
-    case HttpType::TsLive:
-        ret = m_ts_live->process(msg);
-        break;
     case HttpType::TsRecv:
-
         break;
     default:
         break;
@@ -166,54 +143,18 @@ int lms_http_server_conn::Process(CommonMessage *msg)
 
 void lms_http_server_conn::reload()
 {
-    bool ret;
-
-    switch (m_type) {
-    case HttpType::FlvLive:
-        ret = m_flv_live->reload();
-        break;
-    case HttpType::FlvRecv:
-        ret = m_flv_recv->reload();
-        break;
-    case HttpType::SendFile:
-        ret = m_send_file->reload();
-        break;
-    case HttpType::TsLive:
-        ret = m_ts_live->reload();
-        break;
-    case HttpType::TsRecv:
-        ret = m_ts_recv->reload();
-        break;
-    default:
-        break;
-    }
-
-    if (!ret) {
+    if (!m_process->reload()) {
         release();
     }
 }
 
 void lms_http_server_conn::release()
 {
-    switch (m_type) {
-    case HttpType::FlvLive:
-        m_flv_live->release();
-        break;
-    case HttpType::FlvRecv:
-        m_flv_recv->release();
-        break;
-    case HttpType::SendFile:
-        m_send_file->release();
-        break;
-    case HttpType::TsLive:
-        m_ts_live->release();
-        break;
-    case HttpType::TsRecv:
-        m_ts_recv->release();
-        break;
-    default:
-        break;
+    if (m_code == 200) {
+        http_access_log_end(m_process->request(), m_client_ip, m_md5);
     }
+
+    m_process->release();
 
     global_context->delete_id(m_fd);
 
@@ -223,8 +164,6 @@ void lms_http_server_conn::release()
 int lms_http_server_conn::onHttpParser(DHttpParser *parser)
 {
     int ret = ERROR_SUCCESS;
-
-    int code = 200;
 
     DString method = parser->method();
     DString url = parser->getUrl();
@@ -245,7 +184,7 @@ int lms_http_server_conn::onHttpParser(DHttpParser *parser)
             } else if (uri.endWith(".ts")) {
                 m_type = HttpType::TsLive;
             } else {
-                code = 403;
+                m_code = 403;
                 ret = ERROR_HTTP_REQUEST_UNSUPPORTED;
                 log_error("get uri(%s) is not supported. ret=%d", uri.c_str(), ret);
             }
@@ -258,18 +197,22 @@ int lms_http_server_conn::onHttpParser(DHttpParser *parser)
         } else if (uri.endWith(".ts")) {
             m_type = HttpType::TsRecv;
         } else {
-            code = 403;
+            m_code = 403;
             ret = ERROR_HTTP_REQUEST_UNSUPPORTED;
             log_error("post uri(%s) is not supported. ret=%d", uri.c_str(), ret);
         }
     } else {
-        code = 403;
+        m_code = 403;
         ret = ERROR_HTTP_INVALID_METHOD;
         log_error("method(%s) is not supported. ret=%d", method.c_str(), ret);
     }
 
-    if (code != 200) {
-        response_http_header(code);
+    if (m_code != 200) {
+        response_http_header(m_code);
+
+        // write access log to file
+        http_access_log_begin(parser, m_code, m_begin_time, m_client_ip, m_md5, true);
+
         return ret;
     }
 
@@ -300,78 +243,52 @@ int lms_http_server_conn::do_process(DHttpParser *parser)
 
     switch (m_type) {
     case HttpType::FlvLive:
-        ret = init_flv_live(parser);
+        m_process = new lms_http_flv_live(this);
         break;
     case HttpType::FlvRecv:
-        ret = init_flv_recv(parser);
+        m_process = new lms_http_flv_recv(this);
         break;
     case HttpType::SendFile:
-        ret = init_send_file(parser);
+        m_process = new lms_http_send_file(this);
         break;
     case HttpType::TsLive:
-        ret = init_ts_live(parser);
+        m_process = new lms_http_ts_live(this);
         break;
     case HttpType::TsRecv:
-        ret = init_ts_recv(parser);
+        m_process = new lms_http_ts_recv(this);
         break;
     default:
         break;
     }
 
-    if (ret != ERROR_SUCCESS) {
-        int code = 200;
+    ret = m_process->initialize(parser);
 
-        switch (m_type) {
-        case HttpType::FlvRecv:
-        case HttpType::TsRecv:
-            code = 403;
+    if (ret != ERROR_SUCCESS) {
+        m_code = 404;
+
+        switch (ret) {
+        case ERROR_HTTP_FLV_LIVE_REJECT:
+        case ERROR_HTTP_FLV_RECV_REJECT:
+        case ERROR_HTTP_SEND_FILE_REJECT:
+        case ERROR_HTTP_TS_LIVE_REJECT:
+        case ERROR_HTTP_TS_RECV_REJECT:
+            m_code = 403;
             break;
-        default:
-            code = 404;
+        default:         
             break;
         }
 
-        response_http_header(code);
+        response_http_header(m_code);
+
+        // write access log to file
+        http_access_log_begin(parser, m_code, m_begin_time, m_client_ip, m_md5, true);
 
         return ret;
     }
 
-    return start_process();
-}
+    http_access_log_begin(parser, 200, m_begin_time, m_client_ip, m_md5, false);
 
-int lms_http_server_conn::init_flv_live(DHttpParser *parser)
-{
-    m_flv_live = new lms_http_flv_live(this);
-
-    return m_flv_live->initialize(parser);
-}
-
-int lms_http_server_conn::init_flv_recv(DHttpParser *parser)
-{
-    m_flv_recv = new lms_http_flv_recv(this);
-
-    return m_flv_recv->initialize(parser);
-}
-
-int lms_http_server_conn::init_send_file(DHttpParser *parser)
-{
-    m_send_file = new lms_http_send_file(this);
-
-    return m_send_file->initialize(parser);
-}
-
-int lms_http_server_conn::init_ts_live(DHttpParser *parser)
-{
-    m_ts_live = new lms_http_ts_live(this);
-
-    return m_ts_live->initialize(parser);
-}
-
-int lms_http_server_conn::init_ts_recv(DHttpParser *parser)
-{
-    m_ts_recv = new lms_http_ts_recv(this);
-
-    return m_ts_recv->initialize(parser);
+    return m_process->start();
 }
 
 void lms_http_server_conn::response_http_header(int code)
@@ -389,58 +306,6 @@ void lms_http_server_conn::response_http_header(int code)
     response->length = str.size();
 
     write(response, str.size());
-}
-
-int lms_http_server_conn::start_process()
-{
-    int ret = ERROR_SUCCESS;
-
-    switch (m_type) {
-    case HttpType::FlvLive:
-        ret = start_flv_live();
-        break;
-    case HttpType::FlvRecv:
-        ret = start_flv_recv();
-        break;
-    case HttpType::SendFile:
-        ret = start_send_file();
-        break;
-    case HttpType::TsLive:
-        ret = start_ts_live();
-        break;
-    case HttpType::TsRecv:
-        ret = start_ts_recv();
-        break;
-    default:
-        break;
-    }
-
-    return ret;
-}
-
-int lms_http_server_conn::start_flv_live()
-{
-    return m_flv_live->start();
-}
-
-int lms_http_server_conn::start_flv_recv()
-{
-    return m_flv_recv->start();
-}
-
-int lms_http_server_conn::start_send_file()
-{
-    return m_send_file->start();
-}
-
-int lms_http_server_conn::start_ts_live()
-{
-    return m_ts_live->start();
-}
-
-int lms_http_server_conn::start_ts_recv()
-{
-    return m_ts_recv->start();
 }
 
 void lms_http_server_conn::clear_http_body()

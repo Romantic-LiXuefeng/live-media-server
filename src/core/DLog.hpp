@@ -6,7 +6,7 @@
 
 #include <stdarg.h>
 
-#define DEFAULT_LOG_FILEPATH        "./logs/error.log"
+#define DEFAULT_LOG_FILEPATH        "../logs/error.log"
 
 class DFile;
 
@@ -29,7 +29,6 @@ public:
 public:
     void setLogLevel(int level);
 
-    void setEnableCache(bool enabled);
     void setLog2Console(bool enabled);
     void setLog2File(bool enabled);
 
@@ -43,8 +42,10 @@ public:
     void setEnableColorPrint(bool enabled);
     // 设置日志中时间的格式
     void setTimeFormat(const DString &fmt);
-    // 设置文件路径及文件名
+    // 设置文件名
     void setFilePath(const DString &path);
+
+    void reopen();
 
 public:
     virtual void verbose(const char *file, duint16 line, const char *function, duint64 id, const char* fmt, ...);
@@ -60,7 +61,6 @@ protected:
 
 protected:
     int m_logLevel;
-    bool m_enableCache;
     bool m_log2Console;
     bool m_log2File;
     bool m_enablFILE;
@@ -71,13 +71,9 @@ protected:
     DFile *m_file;
 
     DString m_timeFormat;
-
     DString m_filePath;
-    DString m_fileName;
 
     DSpinLock m_mutex;
-
-    struct timeval m_tv;
 
 };
 

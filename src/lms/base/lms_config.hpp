@@ -8,6 +8,8 @@
 #include <vector>
 #include <map>
 
+#define DEFAULT_ACCESS_LOGPATH  "../logs/access.log"
+
 class kernel_request;
 
 class lms_config_base
@@ -659,6 +661,29 @@ public:
     std::vector<lms_location_config_struct*> locations;
 };
 
+class lms_access_log_struct
+{
+public:
+    lms_access_log_struct();
+    ~lms_access_log_struct();
+
+    void load_config(lms_config_directive *directive);
+
+public:
+    bool get_enable();
+    DString get_type();
+    DString get_path();
+
+public:
+    bool enable;
+
+    bool exist_type;
+    DString type;
+
+    bool exist_path;
+    DString path;
+};
+
 /**
  * @brief lms_config_struct class
  * 保存全部配置内容
@@ -711,6 +736,8 @@ public:
 
     bool mempool_enable;      // 默认true
 
+    lms_access_log_struct *access_log;
+
 public:
     std::vector<lms_server_config_struct*> servers;
 
@@ -746,6 +773,11 @@ public:
     std::vector<int> get_http_ports();
 
     lms_server_config_struct *get_server(kernel_request *req);
+
+    bool get_access_log_enable();
+    // all | rtmp | http
+    DString get_access_log_type();
+    DString get_access_log_path();
 
 private:
     static lms_config *m_instance;

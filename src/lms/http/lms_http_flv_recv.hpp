@@ -5,10 +5,11 @@
 #include "lms_source.hpp"
 #include "kernel_request.hpp"
 #include "http_flv_reader.hpp"
+#include "lms_http_process_base.hpp"
 
 class lms_http_server_conn;
 
-class lms_http_flv_recv
+class lms_http_flv_recv : public lms_http_process_base
 {
 public:
     lms_http_flv_recv(lms_http_server_conn *conn);
@@ -21,6 +22,8 @@ public:
 
     bool reload();
     void release();
+
+    kernel_request *request() { return m_req; }
 
 private:
     void get_config_value();
