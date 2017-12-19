@@ -143,6 +143,10 @@ int lms_dvr_flv::onVideo(CommonMessage *msg)
 {
     int ret = ERROR_SUCCESS;
 
+    if (!m_started) {
+        return ret;
+    }
+
     m_has_video = true;
 
     if (msg->is_sequence_header()) {
@@ -167,6 +171,10 @@ int lms_dvr_flv::onAudio(CommonMessage *msg)
 {
     int ret = ERROR_SUCCESS;
 
+    if (!m_started) {
+        return ret;
+    }
+
     if (msg->is_sequence_header()) {
         DFree(m_audio_sh);
         m_audio_sh = new CommonMessage(msg);
@@ -186,6 +194,10 @@ int lms_dvr_flv::onAudio(CommonMessage *msg)
 int lms_dvr_flv::onMetadata(CommonMessage *msg)
 {
     int ret = ERROR_SUCCESS;
+
+    if (!m_started) {
+        return ret;
+    }
 
     DFree(m_metadata);
     m_metadata = new CommonMessage(msg);
